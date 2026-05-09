@@ -2,11 +2,16 @@ data/processed/preview2/
 preview2/
 notebook/
 scripts/
+dataset/
+image/
 
 __pycache__/
 .env
+.claude/
 
 tmp_smoke/
 tmp_smoke_eval/
 
 plan.md
+# Added by code-review-graph
+.code-review-graph/
