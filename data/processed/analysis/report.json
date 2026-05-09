@@ -1,0 +1,104 @@
+{
+  "prompt_category_source": "samples.category",
+  "metrics_summary": [
+    {
+      "model": "openai/gpt-oss-120b",
+      "n_essays": 130,
+      "mean_total": 25.47216494845361,
+      "sd_total": 7.024328886508798,
+      "mean_sd": 1.0036067066982415,
+      "mean_range": 2.4,
+      "mean_cv": 0.04693169454220782,
+      "icc_total": 0.9429106099096358,
+      "icc_n_essays_total": 97,
+      "icc_n_essays_balanced": 81,
+      "icc_n_raters": 5,
+      "auto-approve": 55.38461538461539,
+      "flagged_for_review": 44.61538461538462
+    },
+    {
+      "model": "qwen/qwen3-32b",
+      "n_essays": 128,
+      "mean_total": 28.316796875,
+      "sd_total": 6.00167062484472,
+      "mean_sd": 2.3137551042725595,
+      "mean_range": 5.5625,
+      "mean_cv": 0.09173594322607771,
+      "icc_total": 0.8438579663135294,
+      "icc_n_essays_total": 128,
+      "icc_n_essays_balanced": 123,
+      "icc_n_raters": 5,
+      "auto-approve": 7.8125,
+      "flagged_for_review": 92.1875
+    }
+  ],
+  "severity_bias_ttest": {
+    "model_1": "openai/gpt-oss-120b",
+    "model_2": "qwen/qwen3-32b",
+    "tstat": -7.425318964294233,
+    "pvalue": 5.0305091298059116e-11,
+    "n_pairs": 95
+  },
+  "topic_bias_means": [
+    {
+      "model": "openai/gpt-oss-120b",
+      "prompt_category": "data_report",
+      "topic_mean": 24.195999999999998
+    },
+    {
+      "model": "openai/gpt-oss-120b",
+      "prompt_category": "social_policy_opinion",
+      "topic_mean": 26.21764705882353
+    },
+    {
+      "model": "openai/gpt-oss-120b",
+      "prompt_category": "tech_society_opinion",
+      "topic_mean": 27.176666666666666
+    },
+    {
+      "model": "qwen/qwen3-32b",
+      "prompt_category": "data_report",
+      "topic_mean": 27.365
+    },
+    {
+      "model": "qwen/qwen3-32b",
+      "prompt_category": "social_policy_opinion",
+      "topic_mean": 28.971999999999998
+    },
+    {
+      "model": "qwen/qwen3-32b",
+      "prompt_category": "tech_society_opinion",
+      "topic_mean": 28.84642857142857
+    }
+  ],
+  "hitl_distribution": [
+    {
+      "model": "openai/gpt-oss-120b",
+      "hitl_status": "Auto-Approve",
+      "count": 72,
+      "total": 130,
+      "pct": 55.38461538461539
+    },
+    {
+      "model": "openai/gpt-oss-120b",
+      "hitl_status": "Flagged for Review",
+      "count": 58,
+      "total": 130,
+      "pct": 44.61538461538462
+    },
+    {
+      "model": "qwen/qwen3-32b",
+      "hitl_status": "Auto-Approve",
+      "count": 10,
+      "total": 128,
+      "pct": 7.8125
+    },
+    {
+      "model": "qwen/qwen3-32b",
+      "hitl_status": "Flagged for Review",
+      "count": 118,
+      "total": 128,
+      "pct": 92.1875
+    }
+  ]
+}
