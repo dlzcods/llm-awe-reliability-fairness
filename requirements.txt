@@ -1,0 +1,6 @@
+pandas
+openpyxl
+lingua-language-detector
+kaleido
+plotly
+groq
