@@ -1,0 +1,12 @@
+data/processed/preview2/
+preview2/
+notebook/
+scripts/
+
+__pycache__/
+.env
+
+tmp_smoke/
+tmp_smoke_eval/
+
+plan.md
