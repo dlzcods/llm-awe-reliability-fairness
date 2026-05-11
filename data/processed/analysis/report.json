@@ -6,9 +6,9 @@
       "n_essays": 130,
       "mean_total": 25.47216494845361,
       "sd_total": 7.024328886508798,
-      "mean_sd": 1.0036067066982415,
+      "mean_sd": 1.0036067066982417,
       "mean_range": 2.4,
-      "mean_cv": 0.04693169454220782,
+      "mean_cv": 0.0469316945422078,
       "icc_total": 0.9429106099096358,
       "icc_n_essays_total": 97,
       "icc_n_essays_balanced": 81,
@@ -23,7 +23,7 @@
       "sd_total": 6.00167062484472,
       "mean_sd": 2.3137551042725595,
       "mean_range": 5.5625,
-      "mean_cv": 0.09173594322607771,
+      "mean_cv": 0.0917359432260777,
       "icc_total": 0.8438579663135294,
       "icc_n_essays_total": 128,
       "icc_n_essays_balanced": 123,
@@ -75,30 +75,22 @@
     {
       "model": "openai/gpt-oss-120b",
       "hitl_status": "Auto-Approve",
-      "count": 72,
-      "total": 130,
-      "pct": 55.38461538461539
+      "count": 72
     },
     {
       "model": "openai/gpt-oss-120b",
       "hitl_status": "Flagged for Review",
-      "count": 58,
-      "total": 130,
-      "pct": 44.61538461538462
+      "count": 58
     },
     {
       "model": "qwen/qwen3-32b",
       "hitl_status": "Auto-Approve",
-      "count": 10,
-      "total": 128,
-      "pct": 7.8125
+      "count": 10
     },
     {
       "model": "qwen/qwen3-32b",
       "hitl_status": "Flagged for Review",
-      "count": 118,
-      "total": 128,
-      "pct": 92.1875
+      "count": 118
     }
   ]
 }

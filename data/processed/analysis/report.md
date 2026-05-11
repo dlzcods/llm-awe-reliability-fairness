@@ -33,12 +33,12 @@
 | tech_society_opinion  | Some people think that for robots are very important to you human future development. other think that they are dangerous and have negative effect on society discuss both view and give your opinion.                                                                                                |                             |
 
 ## HITL Distribution
-| model               | hitl_status        |   count |   total |     pct |
-|:--------------------|:-------------------|--------:|--------:|--------:|
-| openai/gpt-oss-120b | Auto-Approve       |      72 |     130 | 55.3846 |
-| openai/gpt-oss-120b | Flagged for Review |      58 |     130 | 44.6154 |
-| qwen/qwen3-32b      | Auto-Approve       |      10 |     128 |  7.8125 |
-| qwen/qwen3-32b      | Flagged for Review |     118 |     128 | 92.1875 |
+| model               | hitl_status        |   count |
+|:--------------------|:-------------------|--------:|
+| openai/gpt-oss-120b | Auto-Approve       |      72 |
+| openai/gpt-oss-120b | Flagged for Review |      58 |
+| qwen/qwen3-32b      | Auto-Approve       |      10 |
+| qwen/qwen3-32b      | Flagged for Review |     118 |
 
 ## Plots
 - boxplot: image\boxplot.png
