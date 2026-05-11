@@ -2,6 +2,25 @@
 
 Research pipeline for analyzing LLM scoring bias on IELTS/TOEFL essays. Compares model reliability using ICC, CV, and t-test metrics with HITL routing.
 
+## Key Findings
+
+From testing `openai/gpt-oss-120b` vs `qwen/qwen3-32b` on 130 essays:
+
+| Metric | GPT-oss-120b | Qwen3-32b | Winner |
+|--------|-------------|-----------|--------|
+| ICC (reliability) | **0.943** | 0.844 | GPT |
+| Auto-approve rate | **55%** | 8% | GPT |
+| Mean score | 25.5 | **28.3** | Qwen |
+| Consistency (CV) | **0.047** | 0.092 | GPT |
+
+**Key insights:**
+- **GPT-oss is more reliable** — ICC 0.94 (excellent) vs 0.84 (good). More consistent scoring across repeated runs.
+- **GPT needs less human review** — 55% auto-approve vs 8%. Saves reviewer time.
+- **Qwen scores higher but less consistently** — Mean 28.3 vs 25.5, but 92% of essays flagged for manual review.
+- **Significant severity bias** — Models disagree by ~2.8 points on average (p < 0.001). GPT is stricter.
+
+> Full interactive dashboard with charts: `report.html`
+
 ## Prerequisites
 
 - Python 3.10+
