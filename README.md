@@ -4,7 +4,7 @@ Research pipeline for analyzing LLM scoring bias on IELTS/TOEFL essays. Compares
 
 ## Key Findings
 
-From testing `openai/gpt-oss-120b` vs `qwen/qwen3-32b` on 130 essays:
+From testing `openai/gpt-oss-120b` vs `qwen/qwen3-32b` on 150 essays:
 
 | Metric | GPT-oss-120b | Qwen3-32b | Winner |
 |--------|-------------|-----------|--------|
