@@ -19,7 +19,7 @@ From testing `openai/gpt-oss-120b` vs `qwen/qwen3-32b` on 150 essays:
 - **Qwen scores higher but less consistently** — Mean 28.3 vs 25.5, but 92% of essays flagged for manual review.
 - **Significant severity bias** — Models disagree by ~2.8 points on average (p < 0.001). GPT is stricter.
 
-> Full interactive dashboard with charts: `report.html`
+> Full interactive dashboard with charts: https://english-bias-framework.tiiny.site
 
 ## Prerequisites
 
