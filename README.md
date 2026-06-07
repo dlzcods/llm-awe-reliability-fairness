@@ -30,6 +30,7 @@ Research pipeline for analyzing LLM scoring bias on IELTS/TOEFL essays. Compares
 
 **Key insights:**
 
+<<<<<<< HEAD
 - **GPT-oss is the more reliable scorer** — ICC 0.943 (excellent) vs 0.844 (good). Its within-essay score range of 2.4 pts is less than half of Qwen's 5.56 pts.
 - **Qwen is the more format-compliant model** — Perfect JSON output on all 128 submitted essays. GPT failed to return parseable scores for 33 essays (25.4%) under zero-shot prompting conditions.
 - **Qwen scores higher but far less consistently** — Mean 28.32 vs 25.47, but 92.2% of its essays were flagged for human review due to high score variance. GPT required review for only 44.6%.
@@ -88,6 +89,9 @@ Threshold: CV < 0.15 AND score range ≤ 2 → Auto-Approve; else Flagged for Re
 | tech_society_opinion | 27.18 | 28.85 | 1.67 |
 
 ---
+=======
+> Full interactive dashboard with charts: https://english-bias-framework.tiiny.site
+>>>>>>> 469f49ecee3da408df1237d1f27bf8a497503289
 
 ## Prerequisites
 
@@ -181,8 +185,13 @@ english-bias-framework/
 To independently verify the reported numbers:
 
 ```bash
+<<<<<<< HEAD
 pip install pandas numpy
 python scripts/extract_metrics.py
 ```
 
 This reads directly from the evaluation JSONL files and prints total observations, paired intersection, and Bland-Altman metrics — matching `data/processed/analysis/report.json`.
+=======
+python -m pytest tests/
+```
+>>>>>>> 469f49ecee3da408df1237d1f27bf8a497503289
