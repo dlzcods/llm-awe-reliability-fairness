@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Bias Mitigation via Human-in-the-Loop | Automated Essay Scoring Research 2025</title>
+<meta name="description" content="Investigating bias mitigation in LLMs through Human-in-the-Loop routing for automated IELTS-like essay scoring. Comparing GPT-oss-120b vs Qwen3-32b reliability, consistency, and severity bias.">
+<meta property="og:title" content="LLM Bias Mitigation via Human-in-the-Loop in Automated Essay Scoring">
+<meta property="og:description" content="Research report: does HITL routing mitigate LLM scoring bias in automated IELTS-like essay evaluation? GPT-oss-120b vs Qwen3-32b.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+/* ═══════════════════════════ DESIGN TOKENS ═══════════════════════════ */
+:root {
+  --paper: #070A12;
+  --paper-dark: #0E1428;
+  --ink: #F3F6FF;
+  --ink-light: #C6CDEE;
+  --ink-muted: #7E8AB8;
+  --scholarly-blue: #DDE6FF;
+  --accent-blue: #4DE1FF;
+  --political-red: #FF4D9D;
+  --gold: #FFD166;
+  --success-green: #2EE59D;
+  --border: rgba(255,255,255,0.12);
+  --shadow-sm: 0 2px 10px rgba(0,0,0,0.30);
+  --shadow-md: 0 10px 38px rgba(0,0,0,0.45);
+  --radius: 8px;
+  --radius-lg: 16px;
+  --font-serif: 'Lora', Georgia, serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --transition: 0.8s cubic-bezier(0.77,0,0.175,1);
+  --transition-fast: 0.3s ease;
+}
+body.light-theme {
+  --paper: #F9F8F5;
+  --paper-dark: #F0EDE7;
+  --ink: #1A1A2E;
+  --ink-light: #4A4A6A;
+  --ink-muted: #8A8AA0;
+  --scholarly-blue: #2C3E50;
+  --accent-blue: #1A5276;
+  --political-red: #C0392B;
+  --political-red-light: #E74C3C;
+  --gold: #D4AC0D;
+  --success-green: #1E8449;
+  --border: rgba(44,62,80,0.12);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-md: 0 8px 32px rgba(0,0,0,0.10);
+}
+
+/* ═══════════════════════════ LIGHT THEME OVERRIDES ═══════════════════════════ */
+/* Hero — tone down neon tints to subtle editorial tones on cream */
+body.light-theme .hero-bg {
+  background:
+    radial-gradient(900px 560px at 15% 10%, rgba(26,82,118,0.06), transparent 55%),
+    radial-gradient(800px 520px at 85% 15%, rgba(192,57,43,0.04), transparent 55%),
+    var(--paper);
+}
+body.light-theme .hero-pattern {
+  background-image:
+    linear-gradient(rgba(26,82,118,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(192,57,43,0.05) 1px, transparent 1px);
+}
+body.light-theme .hero-overlay {
+  background: radial-gradient(circle at center, transparent 0%, rgba(249,248,245,0.55) 65%, var(--paper) 100%);
+}
+body.light-theme .hero-stats { background: rgba(240,237,231,0.90); backdrop-filter: blur(8px); }
+body.light-theme .hero-stats .stat-num { color: var(--scholarly-blue); }
+body.light-theme .hero-stats .stat-label { color: var(--ink-muted); }
+/* Callout boxes — use muted tints, not neon washes */
+body.light-theme .finding-callout { background: rgba(26,82,118,0.06); }
+body.light-theme .finding-callout.highlight-red { background: rgba(192,57,43,0.06); }
+body.light-theme .finding-callout.highlight-green { background: rgba(30,132,73,0.06); }
+/* Tooltip — keep dark bubble regardless of theme */
+body.light-theme .d3-tooltip { background: rgba(26,26,46,0.94); color: #F3F6FF; border-color: rgba(255,255,255,0.12); }
+/* Viz sticky panel — soft warm border in light mode */
+body.light-theme #viz-sticky { border-left-color: var(--border); }
+
+/* ═══════════════════════════ RESET ═══════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;font-size:16px}
+body.scrollytelling-theme {
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(77,225,255,0.14), transparent 60%),
+    radial-gradient(900px 600px at 90% 10%, rgba(255,77,157,0.12), transparent 55%),
+    var(--paper);
+  color: var(--ink);
+  font-family: var(--font-serif);
+  line-height: 1.75;
+  overflow-x: clip;
+}
+body.scrollytelling-theme.light-theme{background:var(--paper)}
+
+/* ═══════════════════════════ PROGRESS BAR ═══════════════════════════ */
+#progress-bar{position:fixed;top:0;left:0;width:0%;height:3px;background:linear-gradient(90deg,var(--accent-blue),var(--political-red));z-index:1000;transition:width 0.1s linear}
+
+/* ═══════════════════════════ NAV ═══════════════════════════ */
+#main-nav{position:fixed;top:0;left:0;right:0;z-index:500;padding:12px 40px;display:flex;align-items:center;background:transparent;transition:background 0.4s ease,box-shadow 0.4s ease}
+#main-nav.scrolled{background:rgba(7,10,18,0.72);backdrop-filter:blur(12px);box-shadow:var(--shadow-sm)}
+body.light-theme #main-nav.scrolled{background:rgba(249,248,245,0.95)}
+.nav-inner{width:100%;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{font-family:var(--font-sans);font-weight:600;font-size:0.875rem;letter-spacing:0.05em;color:var(--scholarly-blue);text-transform:uppercase}
+.nav-controls-group{display:flex;align-items:center;gap:24px}
+.nav-sections{display:flex;gap:8px;align-items:center}
+.nav-dot{display:block;width:8px;height:8px;border-radius:50%;background:var(--ink-muted);transition:all var(--transition-fast);position:relative;opacity:0.4;cursor:pointer;text-decoration:none}
+.nav-dot::after{content:attr(data-label);position:absolute;top:50%;left:50%;transform:translate(-50%,20px) scale(0.8);background:rgba(0,0,0,0.72);color:var(--ink);font-family:var(--font-sans);font-size:0.625rem;font-weight:600;padding:2px 6px;border-radius:3px;white-space:nowrap;opacity:0;transition:all var(--transition-fast);pointer-events:none;letter-spacing:0.04em}
+.nav-dot:hover{opacity:1;background:var(--accent-blue);transform:scale(1.4)}
+.nav-dot:hover::after{opacity:1;transform:translate(-50%,20px) scale(1)}
+.nav-dot.active{opacity:1;background:var(--political-red);transform:scale(1.3)}
+.nav-theme-toggle{display:none!important}
+.nav-theme-toggle:hover{opacity:1;color:var(--accent-blue);transform:scale(1.1)}
+.nav-theme-toggle .sun-icon{display:block}
+.nav-theme-toggle .moon-icon{display:none}
+body.light-theme .nav-theme-toggle .sun-icon{display:none}
+body.light-theme .nav-theme-toggle .moon-icon{display:block}
+
+/* ═══════════════════════════ HERO ═══════════════════════════ */
+#hero{position:relative;height:100vh;height:100dvh;min-height:600px;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;background:var(--paper)}
+.hero-bg{position:absolute;inset:0;background:radial-gradient(900px 560px at 15% 10%,rgba(77,225,255,0.18),transparent 55%),radial-gradient(800px 520px at 85% 15%,rgba(255,77,157,0.16),transparent 55%),var(--paper);overflow:hidden}
+.hero-pattern{position:absolute;inset:0;background-image:linear-gradient(rgba(77,225,255,0.22) 1px,transparent 1px),linear-gradient(90deg,rgba(255,77,157,0.18) 1px,transparent 1px);background-size:34px 34px;background-position:center top}
+.hero-overlay{position:absolute;inset:0;background:radial-gradient(circle at center,transparent 0%,rgba(7,10,18,0.72) 70%,var(--paper) 100%)}
+body.light-theme .hero-overlay{background:radial-gradient(circle at center,transparent 0%,rgba(249,248,245,0.72) 70%,var(--paper) 100%)}
+.hero-content{position:relative;z-index:10;text-align:center;padding:0 24px;max-width:780px}
+.hero-label{font-family:var(--font-sans);font-size:0.75rem;font-weight:600;letter-spacing:0.2em;text-transform:uppercase;color:var(--accent-blue);margin-bottom:24px}
+.hero-title{font-family:var(--font-sans);font-size:clamp(3rem,9vw,4.5rem);font-weight:700;line-height:1.0;color:var(--ink);margin-bottom:20px;letter-spacing:-0.02em}
+.hero-sub{font-family:var(--font-sans);font-size:1rem;font-weight:400;color:var(--ink-light);letter-spacing:0.02em;margin-bottom:12px}
+.hero-authors{font-family:var(--font-serif);font-style:italic;font-size:0.9rem;color:var(--ink-muted);margin-bottom:28px}
+.hero-cta{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1.5px solid var(--accent-blue);color:var(--accent-blue);width:52px;height:52px;border-radius:50%;text-decoration:none;transition:all var(--transition-fast);margin-top:4px}
+.hero-cta:hover{background:var(--accent-blue);color:white;transform:translateY(-2px)}
+.hero-cta svg{animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+.hero-stats{position:absolute;bottom:0;left:0;right:0;z-index:10;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border);background:rgba(14,20,40,0.72);backdrop-filter:blur(8px)}
+.hero-stat{padding:20px;text-align:center;border-right:1px solid var(--border)}
+.hero-stat:last-child{border-right:none}
+.stat-num{font-family:var(--font-sans);font-size:2rem;font-weight:700;color:var(--scholarly-blue);display:inline}
+.stat-unit{font-family:var(--font-sans);font-size:1rem;font-weight:700;color:var(--accent-blue);display:inline}
+.stat-label{font-family:var(--font-sans);font-size:0.7rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-muted);margin-top:4px}
+
+/* ═══════════════════════════ SIDECAR LAYOUT ═══════════════════════════ */
+#sidecar-wrapper{display:flex;align-items:flex-start;max-width:1440px;margin:0 auto}
+#text-column{width:40%;padding:0 48px 0 56px;position:relative;z-index:10}
+#viz-column{width:60%;position:sticky;top:0;height:100vh;overflow:hidden}
+#viz-sticky{width:100%;height:100%;position:relative;background:var(--paper-dark);border-left:1px solid var(--border)}
+#viz-panels-container{position:absolute;inset:0}
+
+/* ═══════════════════════════ SCROLL SECTIONS ═══════════════════════════ */
+.scroll-section{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:80px 0;opacity:0.4;transform:translateY(20px);transition:opacity 0.6s ease,transform 0.6s ease}
+.scroll-section.is-active{opacity:1;transform:translateY(0)}
+.section-label{font-family:var(--font-sans);font-size:0.7rem;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:var(--accent-blue);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.section-label::before{content:'';display:block;width:24px;height:2px;background:var(--accent-blue)}
+.scroll-section h2{font-family:var(--font-sans);font-size:clamp(1.5rem,2.5vw,2rem);font-weight:700;color:var(--scholarly-blue);line-height:1.25;margin-bottom:20px;letter-spacing:-0.02em}
+.scroll-section p{font-family:var(--font-serif);font-size:1rem;line-height:1.85;color:var(--ink-light);margin-bottom:16px}
+.scroll-section strong{color:var(--ink);font-weight:600}
+.scroll-section em{color:var(--accent-blue);font-style:italic}
+.finding-callout{display:flex;gap:16px;align-items:flex-start;background:rgba(77,225,255,0.10);border-left:3px solid var(--accent-blue);border-radius:0 var(--radius-lg) var(--radius-lg) 0;padding:16px 20px;margin-top:20px;font-family:var(--font-sans);font-size:0.9rem;color:var(--scholarly-blue);line-height:1.6}
+.finding-callout.highlight-red{background:rgba(255,77,157,0.10);border-color:var(--political-red);color:var(--political-red)}
+.finding-callout.highlight-green{background:rgba(46,229,157,0.10);border-color:var(--success-green);color:var(--success-green)}
+.callout-icon{font-size:1.3rem;flex-shrink:0;margin-top:1px}
+.data-source-tag{margin-top:20px;font-family:var(--font-sans);font-size:0.72rem;color:var(--ink-muted);letter-spacing:0.03em;border-top:1px solid var(--border);padding-top:12px}
+
+/* ═══════════════════════════ VIZ PANELS ═══════════════════════════ */
+.viz-panel{position:absolute;inset:0;display:flex;flex-direction:column;padding:50px 48px 36px;opacity:0;transform:translateY(30px) scale(0.98);transition:opacity var(--transition),transform var(--transition);pointer-events:none}
+.viz-panel.active{opacity:1;transform:translateY(0) scale(1);pointer-events:all}
+.viz-panel.exiting{opacity:0;transform:translateY(-30px) scale(0.98)}
+.viz-title{font-family:var(--font-sans);font-size:0.8rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-muted);margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.viz-caption{font-family:var(--font-sans);font-size:0.78rem;color:var(--ink-muted);line-height:1.6;margin-top:16px;border-top:1px solid var(--border);padding-top:12px}
+.viz-panel svg{flex:1;width:100%;min-height:0}
+.viz-legend{display:flex;gap:20px;flex-wrap:wrap;margin-top:8px}
+.legend-item{display:flex;align-items:center;gap:7px;font-family:var(--font-sans);font-size:0.75rem;color:var(--ink-muted)}
+.legend-swatch{width:20px;height:3px;border-radius:2px}
+
+/* ═══════════════════════════ D3 SHARED ═══════════════════════════ */
+.axis text{font-family:var(--font-sans);font-size:11px;fill:var(--ink-muted)}
+.axis path,.axis line{stroke:var(--border);stroke-width:1}
+.grid line{stroke:var(--border);stroke-dasharray:3,3}
+.grid path{stroke:none}
+.matrix-label{font-family:var(--font-sans);font-size:11px;font-weight:600;fill:var(--scholarly-blue)}
+.matrix-header{font-family:var(--font-sans);font-size:11px;font-weight:600;fill:var(--scholarly-blue);text-anchor:middle}
+.matrix-cell-rect{transition:opacity 0.4s ease}
+.matrix-cell-text{font-family:var(--font-sans);font-size:10px;font-weight:700;text-anchor:middle;dominant-baseline:middle;pointer-events:none}
+.d3-tooltip{position:absolute;background:rgba(14,20,40,0.92);color:var(--ink);font-family:var(--font-sans);font-size:0.75rem;padding:6px 10px;border-radius:6px;pointer-events:none;border:1px solid var(--border);z-index:999;opacity:0;transition:opacity 0.2s}
+
+/* ═══════════════════════════ FOOTER ═══════════════════════════ */
+#main-footer{background:#050814;color:var(--ink);padding:80px 0 40px}
+.footer-inner{max-width:1000px;margin:0 auto;padding:0 48px;display:grid;grid-template-columns:2fr 1fr 1fr;gap:48px}
+.footer-label{font-family:var(--font-sans);font-size:0.7rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:12px}
+.footer-thesis p{font-family:var(--font-serif);font-style:italic;font-size:0.95rem;line-height:1.7;color:rgba(255,255,255,0.80)}
+.footer-meta p{font-family:var(--font-sans);font-size:0.85rem;color:rgba(255,255,255,0.65);line-height:1.5;margin-bottom:6px;margin-top:6px}
+.footer-meta strong{color:rgba(255,255,255,0.9)}
+.footer-bottom{grid-column:1/-1;padding-top:32px;margin-top:16px;border-top:1px solid rgba(255,255,255,0.12)}
+.footer-bottom p{font-family:var(--font-sans);font-size:0.72rem;color:rgba(255,255,255,0.35);letter-spacing:0.03em}
+
+/* ═══════════════════════════ MOBILE TOPBAR ═══════════════════════════ */
+#mobile-viz-topbar{display:none}
+
+/* ═══════════════════════════ MOBILE RESPONSIVE ═══════════════════════════ */
+@media (max-width:900px){
+  #main-nav{padding:10px 16px}
+  #sidecar-wrapper{flex-direction:column}
+  #text-column{width:100%;padding:0 20px}
+  #text-column .scroll-section{padding:40px 0;min-height:75vh;scroll-margin-top:calc(56vh + 8px);opacity:1!important;transform:none!important;transition:none!important}
+  #viz-column{width:100%;position:sticky;top:0;height:auto;border-left:none;border-bottom:2px solid var(--border);z-index:200}
+  #viz-sticky{border-left:none}
+  #viz-panels-container{position:relative;inset:unset;height:56vh;min-height:280px;overflow:hidden}
+  .viz-panel{padding:16px 16px 12px}
+  .viz-title{font-size:0.7rem;margin-bottom:10px;padding-bottom:8px}
+  .viz-caption{display:none}
+  #mobile-viz-topbar{display:flex;align-items:stretch;border-bottom:1px solid var(--border);background:var(--paper-dark);position:sticky;top:0;z-index:501}
+  #mobile-tab-bar{flex:1;display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #mobile-tab-bar::-webkit-scrollbar{display:none}
+  .mob-tab{flex-shrink:0;padding:10px 14px;font-family:var(--font-sans);font-size:0.68rem;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--ink-muted);background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;transition:color 0.2s,border-color 0.2s;margin-bottom:-1px;line-height:1}
+  .mob-tab.active{color:var(--accent-blue);border-bottom-color:var(--accent-blue)}
+  #mobile-controls{display:flex;align-items:stretch;border-left:1px solid var(--border)}
+  .mob-theme-btn{width:44px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--ink-muted)}
+  .mob-theme-btn .sun-icon{display:block}
+  .mob-theme-btn .moon-icon{display:none}
+  body.light-theme .mob-theme-btn .sun-icon{display:none}
+  body.light-theme .mob-theme-btn .moon-icon{display:block}
+  #hero{height:auto!important;min-height:100dvh;overflow:visible!important;justify-content:flex-start;padding-top:80px}
+  .hero-stats{position:relative;grid-template-columns:repeat(2,1fr)}
+  .hero-stat:nth-child(1),.hero-stat:nth-child(2){border-bottom:1px solid var(--border)}
+  .footer-inner{grid-template-columns:1fr;gap:24px;padding:0 20px}
+}
+@media (max-width:480px){
+  #text-column{padding:0 14px}
+  .finding-callout{padding:12px 14px;font-size:0.85rem}
+  .scroll-section h2{font-size:clamp(1.3rem,5vw,1.7rem)}
+  .viz-panel{padding:10px 10px 8px}
+  .viz-legend{gap:8px}
+  .legend-item{font-size:0.7rem}
+  .mob-tab{padding:8px 10px;font-size:0.63rem}
+}
+@media (max-height:500px) and (orientation:landscape){
+  #viz-panels-container{height:90vh;min-height:200px}
+  .hero-content{padding-top:20px}
+}
+</style>
+</head>
+<body class="scrollytelling-theme light-theme">
+
+<!-- Progress bar -->
+<div id="progress-bar"></div>
+
+<!-- Mobile topbar (shown only on mobile) -->
+<div id="mobile-viz-topbar">
+  <div id="mobile-tab-bar">
+    <button class="mob-tab active" data-viz="viz-context">Overview</button>
+    <button class="mob-tab" data-viz="viz-icc">Reliability</button>
+    <button class="mob-tab" data-viz="viz-bias">Severity Bias</button>
+    <button class="mob-tab" data-viz="viz-scores">Score Gap</button>
+    <button class="mob-tab" data-viz="viz-consistency">Consistency</button>
+    <button class="mob-tab" data-viz="viz-topic">Topic Bias</button>
+    <button class="mob-tab" data-viz="viz-hitl">HITL</button>
+    <button class="mob-tab" data-viz="viz-summary">Findings</button>
+  </div>
+  <div id="mobile-controls">
+    <button class="mob-theme-btn" id="mob-theme-toggle" aria-label="Toggle theme">
+      <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <svg class="moon-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Navigation -->
+<nav id="main-nav">
+  <div class="nav-inner">
+    <div class="nav-brand-group">
+      <span class="nav-logo">LLM Bias Mitigation</span>
+    </div>
+    <div class="nav-controls-group">
+      <div class="nav-sections">
+        <a href="#section-context" class="nav-dot" data-label="Overview"></a>
+        <a href="#section-icc" class="nav-dot" data-label="Reliability"></a>
+        <a href="#section-bias" class="nav-dot" data-label="Severity Bias"></a>
+        <a href="#section-consistency" class="nav-dot" data-label="Consistency"></a>
+        <a href="#section-topic" class="nav-dot" data-label="Topic Bias"></a>
+        <a href="#section-hitl" class="nav-dot" data-label="HITL Routing"></a>
+        <a href="#section-summary" class="nav-dot" data-label="Findings"></a>
+      </div>
+      <button class="nav-theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+        <svg class="sun-icon" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="moon-icon" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section id="hero">
+  <div class="hero-bg">
+    <div class="hero-pattern"></div>
+    <div class="hero-overlay"></div>
+  </div>
+  <div class="hero-content">
+    <div class="hero-label">Research Article &middot; 2026</div>
+    <h1 class="hero-title" style="font-size:clamp(2rem,5.5vw,3.4rem)">
+      Can Human-in-the-Loop<br>
+      Mitigate LLM <span style="color:var(--accent-blue)">Scoring</span>
+      <span style="color:var(--political-red)">Bias?</span>
+    </h1>
+    <p class="hero-sub">Automated IELTS-like essay scoring with GPT-oss-120b &amp; Qwen3-32b, routed through a Human-in-the-Loop framework</p>
+    <p class="hero-authors">Muhammad Abdiel Al Hafiz &middot; llm-awe-reliability-fairness</p>
+    <a href="#section-context" class="hero-cta" aria-label="Start reading">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+    </a>
+  </div>
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div><span class="stat-num" data-target="150">0</span></div>
+      <div class="stat-label">Essays Collected</div>
+    </div>
+    <div class="hero-stat">
+      <div><span class="stat-num" data-target="5">0</span><span class="stat-unit"> Runs</span></div>
+      <div class="stat-label">Per Essay Per Model</div>
+    </div>
+    <div class="hero-stat">
+      <div><span class="stat-num" data-target="943" data-divisor="1000">0</span><span class="stat-unit"> ICC</span></div>
+      <div class="stat-label">GPT Reliability Score</div>
+    </div>
+    <div class="hero-stat">
+      <div><span class="stat-num" data-target="92">0</span><span class="stat-unit">%</span></div>
+      <div class="stat-label">Qwen Flagged for Review</div>
+    </div>
+  </div>
+</section>
+
+<!-- Sidecar layout -->
+<div id="sidecar-wrapper">
+
+  <!-- Left: Text column -->
+  <div id="text-column">
+
+    <!-- Section 1: Overview -->
+    <section class="scroll-section is-active" id="section-context" data-viz-id="viz-context">
+      <div class="section-label">01 &middot; Overview</div>
+      <h2>Two Models, One Test: Can LLMs Grade Fairly?</h2>
+      <p>We tested whether two large language models can score IELTS and TOEFL essays reliably, without systematic bias. If they can, automated scoring becomes a real option. If they cannot, any deployment carries hidden fairness risks.</p>
+      <p><strong>GPT-oss-120b</strong> (Mixture-of-Experts) and <strong>Qwen3-32b</strong> (Dense) were each given the same 150 essay collection. GPT successfully completed scoring for 130 of them; Qwen for 128. Each completed essay received <strong>5 independent scoring passes</strong> to measure self-consistency.</p>
+      <div class="finding-callout">
+        <span class="callout-icon">📋</span>
+        <div><strong>Study design:</strong> 150 essays collected &middot; GPT scored 130 (97 with valid JSON) &middot; Qwen scored 128 (all valid) &middot; 3 prompt types &middot; 4 rubric criteria (Grammar, Lexical, Coherence, Task) &middot; Max score: 32 points</div>
+      </div>
+      <div class="data-source-tag">Source: data/processed/analysis/report.json &middot; hitl_routing.csv</div>
+    </section>
+
+    <!-- Section 2: ICC -->
+    <section class="scroll-section" id="section-icc" data-viz-id="viz-icc">
+      <div class="section-label">02 &middot; Reliability</div>
+      <h2>Intraclass Correlation: How Repeatable Is Each Model?</h2>
+      <p>ICC tells you whether a model gives the same essay the same score when you run it multiple times. A high ICC means the model is <em>self-consistent</em>. A low ICC means the scores shift too much to be trusted.</p>
+      <p><strong>GPT-oss-120b</strong> reaches an ICC of <strong>0.943</strong> on its 97 valid essays, putting it in the Excellent range. <strong>Qwen3-32b</strong> scores <strong>0.844</strong> across all 128 valid essays, firmly Good but short of Excellent.</p>
+      <div class="finding-callout">
+        <span class="callout-icon">📊</span>
+        <div>ICC thresholds: <strong>below 0.50</strong> Poor &middot; <strong>0.50 to 0.75</strong> Moderate &middot; <strong>0.75 to 0.90</strong> Good &middot; <strong>above 0.90</strong> Excellent</div>
+      </div>
+      <div class="finding-callout highlight-red">
+        <span class="callout-icon">⚠️</span>
+        <div>A gap of 0.1 ICC points between models sounds small. In high-stakes assessment, where consistency is non-negotiable, it is not.</div>
+      </div>
+    </section>
+
+    <!-- Section 3: Severity Bias -->
+    <section class="scroll-section" id="section-bias" data-viz-id="viz-bias">
+      <div class="section-label">03 &middot; Severity Bias</div>
+      <h2>GPT Scores About 2 Points Below Qwen Per Essay</h2>
+      <p>A paired t-test on <strong>95 essays</strong> scored by both models finds an average gap of <strong>2.85 points</strong> between the two overall means (t = 7.43, p &lt; 0.001). The Bland-Altman analysis puts the per-essay mean difference at <strong>2.07 points</strong>, with individual essays varying anywhere from 7.38 points below to 3.25 points above.</p>
+      <p>The <em>Bland-Altman plot</em> shows this clearly. If both models scored the same way, the dots would scatter evenly around zero. Most fall below, pointing to GPT consistently applying a stricter standard.</p>
+      <div class="finding-callout highlight-red">
+        <span class="callout-icon">🚨</span>
+        <div>p = 5.03 &times; 10<sup>&minus;11</sup>. The gap is real. Scoring essays from the same cohort with both models gives students graded by GPT a structural disadvantage.</div>
+      </div>
+    </section>
+
+    <!-- Section 4: Score Gap -->
+    <section class="scroll-section" id="section-scores" data-viz-id="viz-scores">
+      <div class="section-label">04 &middot; Score Gap</div>
+      <h2>Essay by Essay: Qwen Scores Higher in Almost Every Case</h2>
+      <p>These are the actual scores for all 95 essays both models evaluated, sorted from lowest to highest. Each point on the blue line is GPT's score for that essay. Each point on the amber line is Qwen's.</p>
+      <p>The two lines move together — both models rank essays in roughly the same order — but the amber line stays above the blue almost all the way across. That gap is the 2-point severity bias made visible.</p>
+      <div class="finding-callout highlight-red">
+        <span class="callout-icon">📉</span>
+        <div>In <strong>74 out of 95 essays</strong> Qwen scored higher than GPT. In only 21 did GPT score higher. The gap is not random noise — it is structural.</div>
+      </div>
+      <div class="data-source-tag">Derived from 95 matched pairs (mean + diff/2 per model). Sorted by essay mean score ascending.</div>
+    </section>
+
+    <!-- Section 5: Consistency -->
+    <section class="scroll-section" id="section-consistency" data-viz-id="viz-consistency">
+      <div class="section-label">05 &middot; Consistency</div>
+      <h2>Run-to-Run Stability: GPT Is 2x More Consistent</h2>
+      <p>Consistency measures how much a model's score changes when you run it again on the same essay. Two numbers capture this: <strong>Coefficient of Variation (CV)</strong> and <strong>score range</strong> across 5 runs.</p>
+      <p>GPT's mean CV is <strong>0.047</strong>. Qwen's is <strong>0.092</strong>, nearly twice as variable. GPT's average score range across runs is <strong>2.4 points</strong>. Qwen's is <strong>5.6 points</strong>.</p>
+      <div class="finding-callout highlight-green">
+        <span class="callout-icon">✅</span>
+        <div>GPT's CV of 0.047 means scores shift less than 5% across runs. You can trust a single GPT score. With Qwen at 0.092, averaging multiple runs is safer.</div>
+      </div>
+    </section>
+
+    <!-- Section 6: Topic Bias -->
+    <section class="scroll-section" id="section-topic" data-viz-id="viz-topic">
+      <div class="section-label">06 &middot; Topic Bias</div>
+      <h2>Prompt Category Matters: Data Tasks Get the Lowest Scores</h2>
+      <p>Both models score essays differently depending on the <em>prompt type</em>. Essays that describe data, charts, or graphs receive the lowest scores from both models across the board.</p>
+      <p>The gap between models is widest for <strong>data report prompts at 3.17 points</strong>, and narrows for opinion tasks. Both models apply stricter criteria when the prompt expects students to interpret visual data that is absent from the text.</p>
+      <div class="finding-callout">
+        <span class="callout-icon">🗺️</span>
+        <div>Neither model fabricates visual content it cannot see. Both score more strictly when the expected chart or graph context is missing from the input.</div>
+      </div>
+    </section>
+
+    <!-- Section 7: HITL -->
+    <section class="scroll-section" id="section-hitl" data-viz-id="viz-hitl">
+      <div class="section-label">07 &middot; HITL Routing</div>
+      <h2>Automation Suitability: GPT Clears 7x More Essays Without Human Review</h2>
+      <p>Human review routing flags any essay where the model's 5 runs are too inconsistent: CV at 0.15 or above, or a score range above 2 points. Those essays go to a human grader before being used.</p>
+      <p>GPT passes <strong>55.4%</strong> of essays straight through without review. Qwen flags <strong>92.2%</strong> of essays, meaning a human needs to check almost every Qwen score before it can be used.</p>
+      <div class="finding-callout highlight-red">
+        <span class="callout-icon">⚠️</span>
+        <div><strong>JSON compliance:</strong> GPT fails to return valid JSON in <strong>25.4%</strong> of runs (33 out of 130 essays). When parsing fails, the score cannot be used at all. Qwen returns valid JSON <strong>every time</strong>.</div>
+      </div>
+    </section>
+
+    <!-- Section 8: Summary -->
+    <section class="scroll-section" id="section-summary" data-viz-id="viz-summary">
+      <div class="section-label">08 &middot; Findings</div>
+      <h2>Three Takeaways for Automated Essay Scoring</h2>
+      <p>The radar chart compares both models across five dimensions where <em>higher is better</em>. No model wins everywhere. Which one to use depends on what your pipeline needs most.</p>
+      <div class="finding-callout">
+        <span class="callout-icon">🏆</span>
+        <div><strong>Use GPT when repeatability is the priority.</strong> An ICC of 0.943 and a CV of 0.047 mean GPT scores stay stable across runs, making it the safer choice for automated pipelines.</div>
+      </div>
+      <div class="finding-callout highlight-red" style="margin-top:12px">
+        <span class="callout-icon">🚫</span>
+        <div><strong>Never score the same cohort with both models.</strong> The 2-point systematic gap means students graded by GPT face a structural disadvantage compared to those graded by Qwen.</div>
+      </div>
+      <div class="finding-callout highlight-green" style="margin-top:12px">
+        <span class="callout-icon">🛠️</span>
+        <div><strong>Fix GPT's JSON output before going to production.</strong> A 25.4% parse failure rate means one in four essays gets no usable score. Qwen's 100% JSON compliance is a real engineering advantage.</div>
+      </div>
+      <div class="data-source-tag">ICC model: two-way mixed, consistency (pingouin). Paired t-test: scipy.stats. n = 95 matched pairs.</div>
+    </section>
+
+  </div><!-- end #text-column -->
+
+  <!-- Right: Viz column -->
+  <div id="viz-column">
+    <div id="viz-sticky">
+      <div id="viz-panels-container">
+
+        <!-- Panel 1: Overview -->
+        <div class="viz-panel active" id="viz-context">
+          <div class="viz-title">Study at a Glance: Two Models, Three Prompt Types</div>
+          <svg data-viz-mount="svg" aria-label="Study overview stats"></svg>
+          <div class="viz-caption">GPT-oss-120b (Mixture-of-Experts) vs Qwen3-32b (Dense) &middot; 150 essays collected &middot; 3 essay categories &middot; 5 independent scoring runs each.</div>
+        </div>
+
+        <!-- Panel 2: ICC -->
+        <div class="viz-panel" id="viz-icc">
+          <div class="viz-title">Intraclass Correlation Coefficient: ICC(2,k) Consistency Model</div>
+          <svg data-viz-mount="svg" aria-label="ICC gauge charts"></svg>
+          <div class="viz-legend">
+            <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-blue)"></div>GPT-oss-120b</div>
+            <div class="legend-item"><div class="legend-swatch" style="background:var(--gold)"></div>Qwen3-32b</div>
+          </div>
+          <div class="viz-caption">Semi-circle gauges span 0–1. Threshold zones: 0.90 = Excellent (blue), 0.75 = Good (gold), 0.50 = Moderate, below = Poor.</div>
+        </div>
+
+        <!-- Panel 3: Bland-Altman -->
+        <div class="viz-panel" id="viz-bias">
+          <div class="viz-title">Bland-Altman Plot: 95 Matched Essay Pairs</div>
+          <svg data-viz-mount="svg" aria-label="Bland-Altman scatter plot"></svg>
+          <div class="viz-legend">
+            <div class="legend-item"><div class="legend-swatch" style="background:#C0392B"></div>Mean difference (GPT &minus; Qwen)</div>
+            <div class="legend-item"><div class="legend-swatch" style="background:#2C3E50;opacity:0.5"></div>&plusmn;1.96 SD limits of agreement</div>
+            <div class="legend-item"><div class="legend-swatch" style="background:#2980B9;border-radius:50%"></div>GPT scored higher</div>
+            <div class="legend-item"><div class="legend-swatch" style="background:#D4AC0D;border-radius:50%"></div>Qwen scored higher</div>
+          </div>
+          <div class="viz-caption">X = mean of both scores. Y = GPT minus Qwen. Mean diff = &minus;2.07 (red line). LoA: &minus;7.38 to +3.25.</div>
+        </div>
+
+        <!-- Panel 4: Score Movement Line Chart -->
+        <div class="viz-panel" id="viz-scores">
+          <div class="viz-title">Score Movement: GPT vs Qwen Across 95 Essays</div>
+          <svg data-viz-mount="svg" aria-label="Line chart of GPT and Qwen scores across 95 essays"></svg>
+          <div class="viz-legend">
+            <div class="legend-item"><div class="legend-swatch" style="background:#2980B9"></div>GPT-oss-120b</div>
+            <div class="legend-item"><div class="legend-swatch" style="background:#D4AC0D"></div>Qwen3-32b</div>
+          </div>
+          <div class="viz-caption">95 essays scored by both models, sorted by mean score (low &rarr; high). Y axis = total score (max 32 points).</div>
+        </div>
+
+        <!-- Panel 5: Consistency -->
+        <div class="viz-panel" id="viz-consistency">
+          <div class="viz-title">Consistency Metrics — CV &amp; Score Range Across 5 Runs</div>
+          <svg data-viz-mount="svg" aria-label="Consistency bar charts"></svg>
+          <div class="viz-legend">
+            <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-blue)"></div>GPT-oss-120b</div>
+            <div class="legend-item"><div class="legend-swatch" style="background:var(--gold)"></div>Qwen3-32b</div>
+          </div>
+          <div class="viz-caption">CV (Coefficient of Variation) = SD / Mean. Lower is better. Score range = max minus min across 5 runs per essay.</div>
+        </div>
+
+        <!-- Panel 5: Topic Bias -->
+        <div class="viz-panel" id="viz-topic">
+          <div class="viz-title">Mean Scores by Prompt Category &amp; Model</div>
+          <svg data-viz-mount="svg" aria-label="Topic bias heatmap"></svg>
+          <div class="viz-legend">
+            <div class="legend-item"><div class="legend-swatch" style="background:#d73027"></div>Lower scores</div>
+            <div class="legend-item"><div class="legend-swatch" style="background:#4575b4"></div>Higher scores</div>
+          </div>
+          <div class="viz-caption">Color scale: RdBu from 22 (red) to 30 (blue). Both models score data_report essays most strictly. Gap (Qwen&minus;GPT) shown below.</div>
+        </div>
+
+        <!-- Panel 6: HITL -->
+        <div class="viz-panel" id="viz-hitl">
+          <div class="viz-title">HITL Routing Distribution &amp; JSON Compliance</div>
+          <svg data-viz-mount="svg" aria-label="HITL donut charts"></svg>
+          <div class="viz-legend">
+            <div class="legend-item"><div class="legend-swatch" style="background:var(--success-green)"></div>Auto-Approve (CV &lt; 0.15 &amp; range &le; 2)</div>
+            <div class="legend-item"><div class="legend-swatch" style="background:var(--political-red)"></div>Flagged for Human Review</div>
+          </div>
+          <div class="viz-caption">Auto-approve threshold: CV &lt; 0.15 AND score range &le; 2 points. JSON failure counts as flagged for GPT.</div>
+        </div>
+
+        <!-- Panel 7: Radar Summary -->
+        <div class="viz-panel" id="viz-summary">
+          <div class="viz-title">Multi-Dimensional Comparison: Five Key Axes</div>
+          <svg data-viz-mount="svg" aria-label="Radar chart comparing GPT and Qwen"></svg>
+          <div class="viz-legend">
+            <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-blue)"></div>GPT-oss-120b</div>
+            <div class="legend-item"><div class="legend-swatch" style="background:var(--gold)"></div>Qwen3-32b</div>
+          </div>
+          <div class="viz-caption">Axes normalized to 0–1 (higher = better). Consistency = inverse CV. HITL Efficiency = auto-approve rate. JSON Compliance = 1 &minus; parse-failure rate.</div>
+        </div>
+
+      </div><!-- end #viz-panels-container -->
+    </div><!-- end #viz-sticky -->
+  </div><!-- end #viz-column -->
+
+</div><!-- end #sidecar-wrapper -->
+
+<!-- Footer -->
+<footer id="main-footer">
+  <div class="footer-inner">
+    <div class="footer-thesis">
+      <div class="footer-label">Research</div>
+      <p>Bias Mitigation in Large Language Models through Human-in-the-Loop in Automated Essay Scoring Based on IELTS-Like Essays</p>
+    </div>
+    <div class="footer-meta">
+      <div class="footer-label">Dataset</div>
+      <p><strong>150</strong> essays collected &middot; 130 scored by GPT &middot; 128 by Qwen</p>
+      <p><strong>50</strong> respondents &middot; 3 prompt types</p>
+      <p><strong>5</strong> scoring runs per essay per model</p>
+    </div>
+    <div class="footer-meta">
+      <div class="footer-label">Methods</div>
+      <p>ICC (pingouin)</p>
+      <p>Paired t-test (scipy)</p>
+      <p>Bland-Altman analysis</p>
+    </div>
+    <div class="footer-bottom">
+      <p>Built with D3.js v7 &middot; Scrollytelling design inspired by alharkan7.github.io &middot; llm-awe-reliability-fairness &copy; 2026</p>
+    </div>
+  </div>
+</footer>
+
+<!-- D3 Tooltip -->
+<div class="d3-tooltip" id="d3-tooltip"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════
+const DATA = {
+  n_target: 150,
+  metrics: [
+    { model:'GPT-oss-120b', color:'#2980B9', n:130, n_valid:97, mean:25.47, sd:7.02,
+      icc:0.9429, iccLabel:'Excellent', mean_sd:1.00, mean_range:2.4, mean_cv:0.0469,
+      autoApprove:55.38, flagged:44.62, hitlAuto:72, hitlFlagged:58, jsonFail:25.4 },
+    { model:'Qwen3-32b', color:'#D4AC0D', n:128, n_valid:128, mean:28.32, sd:6.00,
+      icc:0.8439, iccLabel:'Good', mean_sd:2.31, mean_range:5.56, mean_cv:0.0917,
+      autoApprove:7.81, flagged:92.19, hitlAuto:10, hitlFlagged:118, jsonFail:0 }
+  ],
+  ttest: { tstat:-7.43, pvalue:5.03e-11, n_pairs:95, diff_mean:-2.85 },
+  bland_altman: { mean_diff:-2.07, sd_diff:2.71, loa_upper:3.25, loa_lower:-7.38 },
+  topicBias: [
+    { label:'Data Report',           gpt:24.20, qwen:27.37, gap:3.17 },
+    { label:'Social Policy Opinion', gpt:26.22, qwen:28.97, gap:2.75 },
+    { label:'Tech/Society Opinion',  gpt:27.18, qwen:28.85, gap:1.67 }
+  ],
+  pairs: [{"mean":29.7,"diff":3.8},{"mean":9.6,"diff":-3.2},{"mean":29.9,"diff":1.0},{"mean":34.1,"diff":-3.0},{"mean":32.9,"diff":-5.4},{"mean":28.8,"diff":-1.2},{"mean":29.0,"diff":0.8},{"mean":17.7,"diff":1.0},{"mean":29.9,"diff":-1.4},{"mean":29.3,"diff":0.2},{"mean":34.55,"diff":0.1},{"mean":33.5,"diff":-1.0},{"mean":28.3,"diff":-5.0},{"mean":32.3,"diff":1.0},{"mean":29.3,"diff":0.6},{"mean":31.6,"diff":-2.8},{"mean":20.3,"diff":-8.6},{"mean":24.9,"diff":-3.0},{"mean":27.9,"diff":-1.4},{"mean":24.6,"diff":-5.2},{"mean":31.4,"diff":-5.6},{"mean":29.3,"diff":3.4},{"mean":25.7,"diff":-4.6},{"mean":9.3,"diff":-4.6},{"mean":33.95,"diff":-0.9},{"mean":32.0,"diff":-2.0},{"mean":20.3,"diff":-4.2},{"mean":22.8,"diff":-3.6},{"mean":27.2,"diff":-4.0},{"mean":29.0,"diff":-2.8},{"mean":26.3,"diff":-7.8},{"mean":31.45,"diff":-1.9},{"mean":16.3,"diff":-4.6},{"mean":30.825,"diff":-0.85},{"mean":22.4,"diff":-3.2},{"mean":34.6,"diff":-2.8},{"mean":30.3,"diff":-1.4},{"mean":9.1,"diff":-5.0},{"mean":7.4,"diff":-2.4},{"mean":21.9,"diff":-6.2},{"mean":24.4,"diff":-0.8},{"mean":30.5,"diff":-0.2},{"mean":25.0,"diff":-4.0},{"mean":26.7,"diff":1.0},{"mean":32.5,"diff":-3.4},{"mean":26.1,"diff":1.8},{"mean":30.8,"diff":-2.4},{"mean":17.6,"diff":6.8},{"mean":28.1,"diff":-1.0},{"mean":10.6,"diff":-4.0},{"mean":11.0,"diff":-2.4},{"mean":29.0,"diff":-6.0},{"mean":33.5,"diff":-3.8},{"mean":29.1,"diff":-2.2},{"mean":25.9,"diff":-5.0},{"mean":29.3,"diff":1.4},{"mean":15.0,"diff":-6.0},{"mean":19.7,"diff":-5.4},{"mean":13.2,"diff":-9.2},{"mean":22.3,"diff":-0.6},{"mean":32.8,"diff":-4.0},{"mean":30.9,"diff":0.6},{"mean":33.1,"diff":-1.8},{"mean":25.1,"diff":-1.8},{"mean":28.8,"diff":-1.6},{"mean":23.3,"diff":-0.2},{"mean":31.8,"diff":-2.4},{"mean":30.6,"diff":1.2},{"mean":25.2,"diff":-0.4},{"mean":30.5,"diff":-1.0},{"mean":30.7,"diff":1.4},{"mean":29.4,"diff":-2.4},{"mean":28.9,"diff":-3.8},{"mean":28.4,"diff":-1.2},{"mean":25.5,"diff":-0.6},{"mean":30.7,"diff":-2.2},{"mean":27.4,"diff":-4.4},{"mean":31.7,"diff":-3.4},{"mean":18.3,"diff":3.4},{"mean":30.7,"diff":1.4},{"mean":27.4,"diff":1.6},{"mean":33.1,"diff":-3.4},{"mean":24.7,"diff":-4.6},{"mean":31.3,"diff":0.2},{"mean":31.6,"diff":-1.2},{"mean":27.6,"diff":-4.4},{"mean":25.2,"diff":-2.8},{"mean":30.9,"diff":-3.0},{"mean":28.3,"diff":-0.2},{"mean":31.2,"diff":-2.0},{"mean":31.9,"diff":0.6},{"mean":29.5,"diff":-4.2},{"mean":35.0,"diff":-0.4},{"mean":21.6,"diff":-3.6},{"mean":28.5,"diff":-2.6}]
+};
+
+// ═══════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════
+function getCssVar(name) {
+  return getComputedStyle(document.body).getPropertyValue(name).trim();
+}
+function hexToRgba(hex, alpha) {
+  const c = window.d3 ? window.d3.color(hex) : null;
+  if (!c) return `rgba(0,0,0,${alpha})`;
+  return `rgba(${Math.round(c.r)},${Math.round(c.g)},${Math.round(c.b)},${alpha})`;
+}
+function isLightTheme() {
+  return document.body.classList.contains('light-theme');
+}
+
+// Hardcoded editorial palette — matches alharkan7's chart colors exactly.
+// These work on both dark and light backgrounds (rich tones, not neons).
+const CHART = {
+  gpt:     '#2980B9',  // steel blue  — alharkan: Sumatra / media variables
+  qwen:    '#D4AC0D',  // dark amber  — alharkan: Kalimantan / economic variables
+  success: '#1E8449',  // forest green — alharkan: Sulawesi / sociological variables
+  danger:  '#C0392B',  // crimson     — alharkan: political-red / Bali
+  neutral: '#8A8AA0',  // muted gray  — axes, B-A scatter dots
+  slate:   '#2C3E50',  // dark slate  — reference lines, node fills
+};
+
+// ═══════════════════════════════════════════════════
+// VISUALIZATION RENDERERS
+// ═══════════════════════════════════════════════════
+
+function renderContext(svgEl, data) {
+  const d3 = window.d3;
+  if (!d3) return;
+  const W=580, H=380;
+  const svg = d3.select(svgEl).attr('viewBox', `0 0 ${W} ${H}`);
+  svg.selectAll('*').remove();
+
+  const models = data.metrics;
+  const cx = [150, 430];
+  const colors = [CHART.gpt, CHART.qwen];
+
+  // Cards
+  models.forEach((m, i) => {
+    const g = svg.append('g').attr('transform', `translate(${cx[i]-110},40)`);
+    g.append('rect').attr('width',220).attr('height',280).attr('rx',12)
+      .attr('fill', hexToRgba(colors[i], 0.07))
+      .attr('stroke',colors[i]).attr('stroke-opacity',0.35).attr('stroke-width',1.5);
+
+    // Model name
+    g.append('text').attr('x',110).attr('y',36).attr('text-anchor','middle')
+      .style('font-family','Inter,sans-serif').style('font-size','13px').style('font-weight','700')
+      .attr('fill',colors[i]).text(m.model);
+
+    // Stats rows
+    const stats = [
+      { label:'Scored / Target', val: m.n + ' / ' + data.n_target },
+      { label:'Valid JSON',      val: m.n_valid + ' / ' + m.n },
+      { label:'Mean Score',      val: m.mean.toFixed(1) + ' / 32' },
+      { label:'Score SD',        val: '±' + m.sd.toFixed(1) },
+      { label:'ICC',             val: m.icc.toFixed(3) },
+    ];
+    stats.forEach((s, si) => {
+      const y = 68 + si * 42;
+      g.append('line').attr('x1',16).attr('x2',204).attr('y1',y-10).attr('y2',y-10)
+        .attr('stroke', hexToRgba(colors[i], 0.18)).attr('stroke-width',1);
+      g.append('text').attr('x',16).attr('y',y+6).style('font-family','Inter,sans-serif')
+        .style('font-size','10px').attr('fill',getCssVar('--ink-muted')).text(s.label);
+      g.append('text').attr('x',204).attr('y',y+6).attr('text-anchor','end')
+        .style('font-family','Inter,sans-serif').style('font-size','12px').style('font-weight','600')
+        .attr('fill',getCssVar('--scholarly-blue')).text(s.val);
+    });
+
+    // ICC badge
+    g.append('rect').attr('x',16).attr('y',250).attr('width',188).attr('height',22)
+      .attr('rx',4).attr('fill',colors[i]).attr('opacity',0.12);
+    g.append('text').attr('x',110).attr('y',265).attr('text-anchor','middle')
+      .style('font-family','Inter,sans-serif').style('font-size','11px').style('font-weight','700')
+      .attr('fill',colors[i]).text(`ICC: ${m.iccLabel}`);
+
+    // Animate in
+    g.attr('opacity',0).transition().delay(i*200).duration(600).attr('opacity',1);
+  });
+
+  // Center divider label
+  svg.append('text').attr('x',W/2).attr('y',185).attr('text-anchor','middle')
+    .style('font-family','Inter,sans-serif').style('font-size','9px').style('font-weight','600')
+    .attr('fill',getCssVar('--ink-muted')).attr('letter-spacing','0.1em').text('VS');
+}
+
+function renderICC(svgEl, data) {
+  const d3 = window.d3;
+  if (!d3) return;
+  const W=580, H=400;
+  const svg = d3.select(svgEl).attr('viewBox', `0 0 ${W} ${H}`);
+  svg.selectAll('*').remove();
+
+  const centers = [{cx:155, m:data.metrics[0], color:CHART.gpt},
+                   {cx:425, m:data.metrics[1], color:CHART.qwen}];
+  const cy=210, Ro=130, Ri=100;
+  const arcMin=-Math.PI/2, arcMax=Math.PI/2;
+
+  const arcGen = d3.arc().innerRadius(Ri).outerRadius(Ro).startAngle(arcMin).cornerRadius(6);
+  const bgArc  = d3.arc().innerRadius(Ri).outerRadius(Ro).startAngle(arcMin).endAngle(arcMax).cornerRadius(6);
+
+  // Threshold annotations
+  const thresholds = [{v:0.9,label:'0.90 Excellent',color:CHART.gpt},{v:0.75,label:'0.75 Good',color:CHART.qwen},{v:0.5,label:'0.50 Moderate',color:CHART.neutral}];
+  // shared scale below both gauges
+  const scaleX = d3.scaleLinear().domain([0,1]).range([arcMin,arcMax]);
+  thresholds.forEach(t => {
+    const angle = scaleX(t.v);
+    // Draw tick on both gauges
+    centers.forEach(c => {
+      const tickR = Ro+8;
+      const tx = c.cx + Math.cos(angle-Math.PI/2)*tickR;
+      const ty = cy  + Math.sin(angle-Math.PI/2)*tickR;
+      svg.append('circle').attr('cx',tx).attr('cy',ty).attr('r',2).attr('fill',t.color).attr('opacity',0.6);
+    });
+  });
+
+  centers.forEach(({cx, m, color}) => {
+    // Background arc
+    svg.append('path').attr('transform',`translate(${cx},${cy})`)
+      .attr('d', bgArc()).attr('fill', isLightTheme() ? 'rgba(44,62,80,0.09)' : 'rgba(255,255,255,0.06)');
+
+    // Foreground arc animated
+    const targetAngle = arcMin + (arcMax - arcMin) * m.icc;
+    const fg = svg.append('path').attr('transform',`translate(${cx},${cy})`).attr('fill',color);
+    fg.transition().duration(1400).ease(d3.easeCubicOut)
+      .attrTween('d', () => {
+        const interp = d3.interpolate(arcMin, targetAngle);
+        return t => arcGen({endAngle: interp(t)});
+      });
+
+    // ICC value counter
+    const valText = svg.append('text').attr('x',cx).attr('y',cy-14).attr('text-anchor','middle')
+      .style('font-size','44px').style('font-weight','700').style('font-family','Inter,sans-serif')
+      .attr('fill',getCssVar('--ink'));
+    valText.transition().duration(1400).ease(d3.easeCubicOut)
+      .tween('text', function() {
+        const i = d3.interpolate(0, m.icc);
+        return t => { this.textContent = i(t).toFixed(3); };
+      });
+
+    // Model name
+    svg.append('text').attr('x',cx).attr('y',cy+26).attr('text-anchor','middle')
+      .style('font-size','11px').style('font-family','Inter,sans-serif').style('font-weight','600')
+      .attr('fill',getCssVar('--ink-muted')).text(m.model);
+
+    // Rating badge
+    svg.append('text').attr('x',cx).attr('y',cy+48).attr('text-anchor','middle')
+      .style('font-size','12px').style('font-family','Inter,sans-serif').style('font-weight','700')
+      .attr('fill',color).text(`★ ${m.iccLabel}`);
+
+    // Arc endpoints: 0 and 1 labels
+    const leftPt = {x: cx + Math.cos(-Math.PI)*Ro*0.7, y: cy};
+    const rightPt = {x: cx + Math.cos(0)*Ro*0.7, y: cy};
+    svg.append('text').attr('x',cx-Ro-16).attr('y',cy+4).attr('text-anchor','middle')
+      .style('font-size','10px').style('font-family','Inter,sans-serif')
+      .attr('fill',getCssVar('--ink-muted')).text('0');
+    svg.append('text').attr('x',cx+Ro+16).attr('y',cy+4).attr('text-anchor','middle')
+      .style('font-size','10px').style('font-family','Inter,sans-serif')
+      .attr('fill',getCssVar('--ink-muted')).text('1');
+  });
+
+  // Legend row at bottom
+  const legendY = 370;
+  thresholds.forEach((t,i) => {
+    const lx = 100 + i*140;
+    svg.append('circle').attr('cx',lx).attr('cy',legendY).attr('r',4).attr('fill',t.color).attr('opacity',0.7);
+    svg.append('text').attr('x',lx+10).attr('y',legendY+4).style('font-size','9px')
+      .style('font-family','Inter,sans-serif').attr('fill',getCssVar('--ink-muted')).text(t.label);
+  });
+}
+
+function renderBias(svgEl, data) {
+  const d3 = window.d3;
+  if (!d3) return;
+  const W=560, H=360, M={top:24,right:24,bottom:50,left:50};
+  const iW=W-M.left-M.right, iH=H-M.top-M.bottom;
+  const svg = d3.select(svgEl).attr('viewBox', `0 0 ${W} ${H}`);
+  svg.selectAll('*').remove();
+
+  const pairs = data.pairs;
+  const ba = data.bland_altman;
+
+  const xExt = d3.extent(pairs, d=>d.mean);
+  const x = d3.scaleLinear().domain([xExt[0]-1, xExt[1]+1]).range([0,iW]);
+  const y = d3.scaleLinear().domain([ba.loa_lower-1, ba.loa_upper+2]).range([iH,0]);
+
+  const g = svg.append('g').attr('transform',`translate(${M.left},${M.top})`);
+
+  // Grid
+  g.append('g').attr('class','grid').call(d3.axisLeft(y).ticks(6).tickSize(-iW).tickFormat(''));
+  g.append('g').attr('class','grid').attr('transform',`translate(0,${iH})`).call(d3.axisBottom(x).ticks(6).tickSize(-iH).tickFormat(''));
+
+  // Axes
+  g.append('g').attr('class','axis').attr('transform',`translate(0,${iH})`).call(d3.axisBottom(x).ticks(6));
+  g.append('g').attr('class','axis').call(d3.axisLeft(y).ticks(6));
+
+  // Axis labels
+  svg.append('text').attr('x',M.left+iW/2).attr('y',H-6).attr('text-anchor','middle')
+    .style('font-size','11px').style('font-family','Inter,sans-serif')
+    .attr('fill',getCssVar('--ink-muted')).text('Mean Score (GPT + Qwen) / 2');
+  svg.append('text').attr('transform',`translate(12,${M.top+iH/2}) rotate(-90)`)
+    .attr('text-anchor','middle').style('font-size','11px').style('font-family','Inter,sans-serif')
+    .attr('fill',getCssVar('--ink-muted')).text('Difference (GPT − Qwen)');
+
+  // Zero reference
+  g.append('line').attr('x1',0).attr('x2',iW).attr('y1',y(0)).attr('y2',y(0))
+    .attr('stroke',getCssVar('--ink-muted')).attr('stroke-width',1).attr('stroke-dasharray','2,4').attr('opacity',0.4);
+
+  // LoA lines with stroke-dash animation
+  [[ba.mean_diff, CHART.danger, 2.5, 'solid'],
+   [ba.loa_upper, CHART.slate,  1.5, '6,4'],
+   [ba.loa_lower, CHART.slate,  1.5, '6,4']].forEach(([val, col, sw, dash]) => {
+    const lineEl = g.append('line')
+      .attr('x1',0).attr('x2',iW)
+      .attr('y1',y(val)).attr('y2',y(val))
+      .attr('stroke',col).attr('stroke-width',sw)
+      .attr('stroke-dasharray', dash === 'solid' ? null : dash);
+    if (dash === 'solid') {
+      const totalLen = iW;
+      lineEl.attr('stroke-dasharray', totalLen).attr('stroke-dashoffset', totalLen)
+        .transition().delay(800).duration(1000).ease(d3.easeCubicOut)
+        .attr('stroke-dashoffset', 0);
+    }
+    // Labels
+    g.append('text').attr('x',iW+4).attr('y',y(val)+4).style('font-size','9px')
+      .style('font-family','Inter,sans-serif').attr('fill',col)
+      .text(typeof val === 'number' ? val.toFixed(2) : val);
+  });
+
+  // Dots
+  const tooltip = document.getElementById('d3-tooltip');
+  pairs.forEach((p,i) => {
+    g.append('circle').attr('cx',x(p.mean)).attr('cy',y(p.diff)).attr('r',4)
+      .attr('fill', p.diff > 0 ? CHART.gpt : p.diff < 0 ? CHART.qwen : CHART.neutral)
+      .attr('opacity',0).attr('stroke','none')
+      .on('mouseover', function(event) {
+        d3.select(this).attr('r',6).attr('opacity',1);
+        const who = p.diff > 0 ? '&#9650; GPT higher' : p.diff < 0 ? '&#9660; Qwen higher' : '= Tied';
+        if(tooltip){tooltip.style.opacity='1';tooltip.innerHTML=`Mean: ${p.mean.toFixed(1)}<br>Diff (GPT&minus;Qwen): ${p.diff.toFixed(1)}<br>${who}`;}
+      })
+      .on('mousemove', function(event) {
+        if(tooltip){tooltip.style.left=(event.pageX+12)+'px';tooltip.style.top=(event.pageY-24)+'px';}
+      })
+      .on('mouseout', function() {
+        d3.select(this).attr('r',4).attr('opacity',0.75);
+        if(tooltip){tooltip.style.opacity='0';}
+      })
+      .transition().delay(i * 8).duration(300).attr('opacity',0.75);
+  });
+}
+
+function renderScores(svgEl, data) {
+  const d3 = window.d3;
+  if (!d3) return;
+  const W=580, H=360, M={top:24,right:60,bottom:50,left:44};
+  const iW=W-M.left-M.right, iH=H-M.top-M.bottom;
+  const svg = d3.select(svgEl).attr('viewBox',`0 0 ${W} ${H}`);
+  svg.selectAll('*').remove();
+
+  const pts = data.pairs
+    .map(p => ({ gpt: p.mean + p.diff/2, qwen: p.mean - p.diff/2, mean: p.mean }))
+    .sort((a,b) => a.mean - b.mean)
+    .map((d,i) => ({...d, i}));
+
+  const x = d3.scaleLinear().domain([0, pts.length-1]).range([0, iW]);
+  const yMin = Math.floor(d3.min(pts, d => Math.min(d.gpt, d.qwen))) - 1;
+  const yMax = Math.ceil(d3.max(pts, d => Math.max(d.gpt, d.qwen))) + 1;
+  const y = d3.scaleLinear().domain([yMin, yMax]).range([iH, 0]);
+
+  const g = svg.append('g').attr('transform',`translate(${M.left},${M.top})`);
+
+  g.append('g').attr('class','grid').call(d3.axisLeft(y).ticks(6).tickSize(-iW).tickFormat(''));
+  g.append('g').attr('class','axis').attr('transform',`translate(0,${iH})`).call(d3.axisBottom(x).ticks(10).tickFormat(d => d+1));
+  g.append('g').attr('class','axis').call(d3.axisLeft(y).ticks(6));
+
+  svg.append('text').attr('x', M.left+iW/2).attr('y', H-6)
+    .attr('text-anchor','middle').style('font-size','11px').style('font-family','Inter,sans-serif')
+    .attr('fill', getCssVar('--ink-muted')).text('Essays sorted by mean score (low → high)');
+  svg.append('text').attr('transform',`translate(12,${M.top+iH/2}) rotate(-90)`)
+    .attr('text-anchor','middle').style('font-size','11px').style('font-family','Inter,sans-serif')
+    .attr('fill', getCssVar('--ink-muted')).text('Score');
+
+  const area = d3.area()
+    .x(d => x(d.i))
+    .y0(d => y(d.qwen))
+    .y1(d => y(d.gpt))
+    .curve(d3.curveCatmullRom.alpha(0.5));
+  g.append('path').datum(pts).attr('d', area)
+    .attr('fill', hexToRgba(CHART.danger, 0.07));
+
+  const line = d3.line().curve(d3.curveCatmullRom.alpha(0.5));
+
+  [[pts.map(d=>[x(d.i), y(d.gpt)]), CHART.gpt, 'GPT'],
+   [pts.map(d=>[x(d.i), y(d.qwen)]), CHART.qwen, 'Qwen']].forEach(([coords, col, label], mi) => {
+    const path = g.append('path')
+      .datum(coords).attr('fill','none').attr('stroke', col).attr('stroke-width', 2).attr('d', line);
+    const len = path.node().getTotalLength();
+    path.attr('stroke-dasharray', len).attr('stroke-dashoffset', len)
+      .transition().delay(mi * 300).duration(1400).ease(d3.easeCubicOut)
+      .attr('stroke-dashoffset', 0);
+    const last = coords[coords.length-1];
+    g.append('text')
+      .attr('x', last[0]+6).attr('y', last[1]+4)
+      .style('font-size','10px').style('font-family','Inter,sans-serif').style('font-weight','600')
+      .attr('fill', col).text(label);
+  });
+}
+
+function renderConsistency(svgEl, data) {
+  const d3 = window.d3;
+  if (!d3) return;
+  const W=560, H=360, M={top:30,right:80,bottom:30,left:30};
+  const iW=W-M.left-M.right, iH=H-M.top-M.bottom;
+  const svg = d3.select(svgEl).attr('viewBox', `0 0 ${W} ${H}`);
+  svg.selectAll('*').remove();
+
+  const g = svg.append('g').attr('transform',`translate(${M.left},${M.top})`);
+  const metrics = [
+    { key:'mean_cv',    label:'Coefficient of Variation (CV)', max:0.15, suffix:'' },
+    { key:'mean_range', label:'Score Range (points)',          max:8,    suffix:' pts' }
+  ];
+  const barH = 36, gapBetweenGroups=40, gapBetweenBars=6;
+  const colors = [CHART.gpt, CHART.qwen];
+  let yOff = 10;
+
+  metrics.forEach((metric, mi) => {
+    const xScale = d3.scaleLinear().domain([0, metric.max]).range([0, iW]);
+
+    // Metric group label
+    g.append('text').attr('x',0).attr('y',yOff).style('font-size','11px')
+      .style('font-family','Inter,sans-serif').style('font-weight','700')
+      .attr('fill',getCssVar('--ink')).text(metric.label);
+    yOff += 18;
+
+    // Reference line
+    if (mi === 0) {
+      const refX = xScale(0.05);
+      g.append('line').attr('x1',refX).attr('x2',refX).attr('y1',yOff-2).attr('y2',yOff+2*barH+gapBetweenBars+4)
+        .attr('stroke',getCssVar('--accent-blue')).attr('stroke-width',1).attr('stroke-dasharray','3,3').attr('opacity',0.5);
+      g.append('text').attr('x',refX+4).attr('y',yOff-4).style('font-size','9px')
+        .style('font-family','Inter,sans-serif').attr('fill',getCssVar('--accent-blue')).attr('opacity',0.7).text('0.05 target');
+    }
+
+    data.metrics.forEach((m, i) => {
+      const val = m[metric.key];
+      const barW = xScale(val);
+      const y = yOff + i*(barH+gapBetweenBars);
+
+      // Bar bg
+      g.append('rect').attr('x',0).attr('y',y).attr('width',iW).attr('height',barH)
+        .attr('rx',4).attr('fill', isLightTheme() ? 'rgba(44,62,80,0.05)' : 'rgba(255,255,255,0.03)');
+
+      // Model label (white inside bar for readability on light theme)
+      g.append('text').attr('x',4).attr('y',y+barH/2+4).style('font-size','10px')
+        .style('font-family','Inter,sans-serif').style('font-weight','600')
+        .attr('fill', isLightTheme() ? 'rgba(255,255,255,0.92)' : colors[i]).text(m.model);
+
+      // Bar
+      g.append('rect').attr('x',0).attr('y',y).attr('width',0).attr('height',barH)
+        .attr('rx',4).attr('fill',colors[i]).attr('opacity', i===0 ? 0.8 : 0.7)
+        .transition().delay(mi*200 + i*100 + 300).duration(700).ease(d3.easeCubicOut)
+        .attr('width', barW);
+
+      // Value label
+      g.append('text').attr('x',barW+6).attr('y',y+barH/2+4).style('font-size','11px')
+        .style('font-family','Inter,sans-serif').style('font-weight','700')
+        .attr('fill',colors[i]).attr('opacity',0)
+        .transition().delay(mi*200 + i*100 + 1000).duration(300)
+        .attr('opacity',1)
+        .tween('text', function() {
+          const interpolator = d3.interpolate(0, val);
+          const isCV = metric.key === 'mean_cv';
+          return t => { this.setAttribute('x', xScale(interpolator(t))+6); this.textContent = isCV ? interpolator(t).toFixed(3) : interpolator(t).toFixed(1)+metric.suffix; };
+        });
+    });
+
+    yOff += 2*barH + gapBetweenBars + gapBetweenGroups;
+  });
+
+  // x-axis for second metric
+  const xScale2 = d3.scaleLinear().domain([0,8]).range([0,iW]);
+  g.append('g').attr('class','axis').attr('transform',`translate(0,${yOff-gapBetweenGroups+2*barH+gapBetweenBars})`)
+    .call(d3.axisBottom(xScale2).ticks(5).tickFormat(d=>d+' pts'));
+}
+
+function renderTopic(svgEl, data) {
+  const d3 = window.d3;
+  if (!d3) return;
+  const W=560, H=360, M={top:70,right:20,bottom:60,left:155};
+  const iW=W-M.left-M.right, iH=H-M.top-M.bottom;
+  const svg = d3.select(svgEl).attr('viewBox', `0 0 ${W} ${H}`);
+  svg.selectAll('*').remove();
+
+  const topics = data.topicBias;
+  const rows = ['GPT-oss-120b','Qwen3-32b'];
+  const colorScale = d3.scaleSequential(d3.interpolateRdBu).domain([22,30]);
+
+  const xScale = d3.scaleBand().domain(topics.map(t=>t.label)).range([0,iW]).padding(0.12);
+  const yScale = d3.scaleBand().domain(rows).range([0,iH]).padding(0.15);
+
+  const g = svg.append('g').attr('transform',`translate(${M.left},${M.top})`);
+
+  // Column headers
+  topics.forEach(t => {
+    svg.append('text').attr('x',M.left + (xScale(t.label)||0) + xScale.bandwidth()/2)
+      .attr('y',M.top-14).attr('text-anchor','middle').attr('class','matrix-header')
+      .text(t.label.length > 20 ? t.label.slice(0,18)+'…' : t.label);
+    // Wrapped label
+    const words = t.label.split(' ');
+    if (words.length > 2) {
+      svg.append('text').attr('x',M.left + (xScale(t.label)||0) + xScale.bandwidth()/2)
+        .attr('y',M.top-26).attr('text-anchor','middle').attr('class','matrix-header')
+        .text(words.slice(0,-1).join(' '));
+      svg.selectAll('text:last-child').remove(); // Reset and do proper wrap
+    }
+  });
+
+  // Row labels
+  rows.forEach(r => {
+    svg.append('text').attr('x',M.left-10)
+      .attr('y',M.top + (yScale(r)||0) + yScale.bandwidth()/2)
+      .attr('text-anchor','end').attr('class','matrix-label').attr('dominant-baseline','middle')
+      .text(r);
+  });
+
+  // Column headers (clean)
+  svg.selectAll('.matrix-header').remove();
+  topics.forEach((t,ti) => {
+    const x = M.left + (xScale(t.label)||0) + xScale.bandwidth()/2;
+    const lines = t.label.split(' ');
+    const lineH = 12;
+    const startY = M.top - 10 - (lines.length-1)*lineH;
+    lines.forEach((l,li) => {
+      svg.append('text').attr('x',x).attr('y',startY+li*lineH)
+        .attr('text-anchor','middle').attr('class','matrix-header').text(l);
+    });
+  });
+
+  // Cells
+  rows.forEach((row, ri) => {
+    topics.forEach((topic, ti) => {
+      const val = ri === 0 ? topic.gpt : topic.qwen;
+      const cellX = xScale(topic.label) || 0;
+      const cellY = yScale(row) || 0;
+      const cw = xScale.bandwidth(), ch = yScale.bandwidth();
+
+      const cellG = g.append('g').attr('transform',`translate(${cellX},${cellY})`).attr('opacity',0);
+      cellG.append('rect').attr('width',cw).attr('height',ch).attr('rx',6)
+        .attr('fill', colorScale(val));
+      cellG.append('text').attr('x',cw/2).attr('y',ch/2)
+        .attr('text-anchor','middle').attr('dominant-baseline','middle')
+        .style('font-family','Inter,sans-serif').style('font-size','13px').style('font-weight','700')
+        .attr('fill', val > 26 ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.8)')
+        .text(val.toFixed(1));
+      cellG.transition().delay((ri*3+ti)*80+300).duration(500).attr('opacity',1);
+    });
+  });
+
+  // Gap row
+  const gapY = iH + 20;
+  const gapLabel = svg.append('text').attr('x',M.left-10).attr('y',M.top+gapY+yScale.bandwidth()/2-6)
+    .attr('text-anchor','end').attr('class','matrix-label').attr('dominant-baseline','middle')
+    .style('fill',getCssVar('--political-red')).text('Gap (Qwen−GPT)');
+  topics.forEach((t, ti) => {
+    const cellX = (xScale(t.label)||0);
+    const cw = xScale.bandwidth(), ch = yScale.bandwidth()*0.7;
+    const gapG = g.append('g').attr('transform',`translate(${cellX},${gapY})`).attr('opacity',0);
+    gapG.append('rect').attr('width',cw).attr('height',ch).attr('rx',6)
+      .attr('fill', hexToRgba(getCssVar('--political-red'), Math.min(0.8, t.gap/5)));
+    gapG.append('text').attr('x',cw/2).attr('y',ch/2)
+      .attr('text-anchor','middle').attr('dominant-baseline','middle')
+      .style('font-family','Inter,sans-serif').style('font-size','12px').style('font-weight','700')
+      .attr('fill','rgba(255,255,255,0.9)').text('+'+t.gap.toFixed(2));
+    gapG.transition().delay(600+ti*100).duration(500).attr('opacity',1);
+  });
+}
+
+function renderHITL(svgEl, data) {
+  const d3 = window.d3;
+  if (!d3) return;
+  const W=560, H=360;
+  const svg = d3.select(svgEl).attr('viewBox', `0 0 ${W} ${H}`);
+  svg.selectAll('*').remove();
+
+  const models = data.metrics;
+  const centers = [{cx:148, m:models[0]},{cx:412, m:models[1]}];
+  const Ro=100, Ri=68, cy=170;
+  const greenC = CHART.success, redC = CHART.danger;
+
+  centers.forEach(({cx, m}) => {
+    const pie = d3.pie().value(d=>d.val).sort(null);
+    const segments = [{val:m.autoApprove, color:greenC},{val:m.flagged, color:redC}];
+    const arcData = pie(segments);
+    const arcGen = d3.arc().innerRadius(Ri).outerRadius(Ro).cornerRadius(4);
+    const arcGen0 = d3.arc().innerRadius(Ri).outerRadius(Ro).startAngle(0).endAngle(0);
+
+    arcData.forEach(d => {
+      const path = svg.append('path').attr('transform',`translate(${cx},${cy})`)
+        .attr('fill',d.data.color).attr('opacity', d.data.color===greenC ? 0.85 : 0.75);
+      path.transition().duration(1000).ease(d3.easeCubicOut)
+        .attrTween('d', function() {
+          const interp = d3.interpolate({startAngle:d.startAngle,endAngle:d.startAngle}, d);
+          return t => arcGen(interp(t));
+        });
+    });
+
+    // Center text: auto-approve %
+    const centerText = svg.append('text').attr('x',cx).attr('y',cy-6).attr('text-anchor','middle')
+      .style('font-size','28px').style('font-weight','700').style('font-family','Inter,sans-serif')
+      .attr('fill',getCssVar('--ink')).text('0%');
+    centerText.transition().duration(1000).ease(d3.easeCubicOut)
+      .tween('text', function() {
+        const i = d3.interpolate(0, m.autoApprove);
+        return t => { this.textContent = i(t).toFixed(0)+'%'; };
+      });
+    svg.append('text').attr('x',cx).attr('y',cy+16).attr('text-anchor','middle')
+      .style('font-size','9px').style('font-family','Inter,sans-serif').style('font-weight','600')
+      .attr('fill',getCssVar('--ink-muted')).text('AUTO-APPROVE');
+
+    // Model name
+    svg.append('text').attr('x',cx).attr('y',cy+Ro+22).attr('text-anchor','middle')
+      .style('font-size','12px').style('font-family','Inter,sans-serif').style('font-weight','700')
+      .attr('fill', m.color)
+      .text(m.model);
+
+    // JSON compliance badge
+    const badgeY = cy+Ro+44;
+    const failColor = m.jsonFail > 0 ? redC : greenC;
+    svg.append('rect').attr('x',cx-60).attr('y',badgeY-12).attr('width',120).attr('height',22)
+      .attr('rx',4).attr('fill',failColor).attr('opacity',0.15);
+    svg.append('text').attr('x',cx).attr('y',badgeY+3).attr('text-anchor','middle')
+      .style('font-size','10px').style('font-family','Inter,sans-serif').style('font-weight','600')
+      .attr('fill',failColor)
+      .text(m.jsonFail > 0 ? `JSON fail: ${m.jsonFail}%` : 'JSON: 100% valid');
+  });
+
+  // Separator
+  svg.append('line').attr('x1',W/2).attr('x2',W/2).attr('y1',30).attr('y2',H-10)
+    .attr('stroke',getCssVar('--border')).attr('stroke-width',1);
+}
+
+function renderSummary(svgEl, data) {
+  const d3 = window.d3;
+  if (!d3) return;
+  const W=560, H=360;
+  const svg = d3.select(svgEl).attr('viewBox', `0 0 ${W} ${H}`);
+  svg.selectAll('*').remove();
+
+  const cx=280, cy=185, R=130;
+  const axes = [
+    { label:'Reliability\n(ICC)',       gpt:0.943,  qwen:0.844  },
+    { label:'Run\nConsistency',         gpt:0.687,  qwen:0.389  }, // 1 - cv/0.15
+    { label:'HITL\nEfficiency',         gpt:0.554,  qwen:0.078  },
+    { label:'JSON\nCompliance',         gpt:0.746,  qwen:1.000  },
+    { label:'Score\nStability',         gpt:0.76,   qwen:0.444  }, // 1 - range/10
+  ];
+  const n = axes.length;
+  const angleStep = (2*Math.PI)/n;
+  const blueC = CHART.gpt, goldC = CHART.qwen;
+
+  // Grid rings
+  [0.25,0.5,0.75,1.0].forEach(r => {
+    const pts = axes.map((_,i) => {
+      const a = i*angleStep - Math.PI/2;
+      return [cx + Math.cos(a)*R*r, cy + Math.sin(a)*R*r];
+    });
+    svg.append('polygon').attr('points', pts.map(p=>p.join(',')).join(' '))
+      .attr('fill','none').attr('stroke',getCssVar('--border')).attr('stroke-width',1);
+  });
+
+  // Spokes
+  axes.forEach((_,i) => {
+    const a = i*angleStep - Math.PI/2;
+    svg.append('line').attr('x1',cx).attr('y1',cy)
+      .attr('x2',cx+Math.cos(a)*R).attr('y2',cy+Math.sin(a)*R)
+      .attr('stroke',getCssVar('--border')).attr('stroke-width',1);
+  });
+
+  // Axis labels
+  axes.forEach((ax,i) => {
+    const a = i*angleStep - Math.PI/2;
+    const lx = cx + Math.cos(a)*(R+22);
+    const ly = cy + Math.sin(a)*(R+22);
+    const lines = ax.label.split('\n');
+    lines.forEach((l,li) => {
+      svg.append('text').attr('x',lx).attr('y',ly+(li-lines.length/2+0.5)*13)
+        .attr('text-anchor','middle').attr('dominant-baseline','middle')
+        .style('font-size','10px').style('font-family','Inter,sans-serif').style('font-weight','600')
+        .attr('fill',getCssVar('--ink-muted')).text(l);
+    });
+  });
+
+  // Polygon builder
+  function buildPath(vals) {
+    return axes.map((ax,i) => {
+      const a = i*angleStep - Math.PI/2;
+      const r = R * vals[i];
+      return [cx + Math.cos(a)*r, cy + Math.sin(a)*r];
+    });
+  }
+
+  const gptVals  = axes.map(a=>a.gpt);
+  const qwenVals = axes.map(a=>a.qwen);
+  const zeroVals = axes.map(()=>0);
+
+  [[gptVals, blueC, 0.4],[qwenVals, goldC, 0.3]].forEach(([vals, color, fillOp],pi) => {
+    const polyEl = svg.append('polygon')
+      .attr('points', buildPath(zeroVals).map(p=>p.join(',')).join(' '))
+      .attr('fill',color).attr('fill-opacity',fillOp)
+      .attr('stroke',color).attr('stroke-width',2).attr('stroke-opacity',0.9);
+    polyEl.transition().delay(pi*200).duration(1200).ease(d3.easeCubicOut)
+      .attrTween('points', function() {
+        const from = buildPath(zeroVals);
+        const to   = buildPath(vals);
+        return t => to.map((pt,i) => [
+          from[i][0] + (pt[0]-from[i][0])*t,
+          from[i][1] + (pt[1]-from[i][1])*t,
+        ].join(',')).join(' ');
+      });
+  });
+
+  // Vertex dots
+  [[gptVals, blueC],[qwenVals, goldC]].forEach(([vals, color], pi) => {
+    axes.forEach((ax, i) => {
+      const a = i*angleStep - Math.PI/2;
+      const r = R * vals[i];
+      svg.append('circle').attr('cx',cx+Math.cos(a)*r).attr('cy',cy+Math.sin(a)*r).attr('r',4)
+        .attr('fill',color).attr('opacity',0)
+        .transition().delay(pi*200+1200).duration(300).attr('opacity',1);
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// COUNTER ANIMATION
+// ═══════════════════════════════════════════════════
+function initCounters() {
+  const counters = document.querySelectorAll('.stat-num[data-target]');
+  if (!('IntersectionObserver' in window)) return;
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const el = entry.target;
+      const target = +el.dataset.target;
+      const divisor = el.dataset.divisor ? +el.dataset.divisor : null;
+      const duration = 1800;
+      const start = performance.now();
+      function update(now) {
+        const t = Math.min((now-start)/duration,1);
+        const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+        const val = Math.floor(ease*target);
+        el.textContent = divisor ? (val/divisor).toFixed(3) : val.toLocaleString();
+        if (t < 1) requestAnimationFrame(update);
+        else el.textContent = divisor ? (target/divisor).toFixed(3) : target.toLocaleString();
+      }
+      requestAnimationFrame(update);
+      obs.unobserve(el);
+    });
+  }, {threshold:0.5});
+  counters.forEach(c => obs.observe(c));
+}
+
+// ═══════════════════════════════════════════════════
+// SCROLLY ENGINE
+// ═══════════════════════════════════════════════════
+class ScrollyEngine {
+  constructor() {
+    this.vizInitialized = {};
+    this.lastActiveSectionId = null;
+    this.renderers = {
+      'viz-context':     renderContext,
+      'viz-icc':         renderICC,
+      'viz-bias':        renderBias,
+      'viz-scores':      renderScores,
+      'viz-consistency': renderConsistency,
+      'viz-topic':       renderTopic,
+      'viz-hitl':        renderHITL,
+      'viz-summary':     renderSummary,
+    };
+  }
+
+  getSections() {
+    return Array.from(document.querySelectorAll('.scroll-section'))
+      .map((el,i) => ({ textId:el.id, vizId:el.dataset.vizId||'', navIndex:i }))
+      .filter(s => s.textId && s.vizId);
+  }
+
+  switchViz(nextVizId) {
+    const current = document.querySelector('.viz-panel.active');
+    const next = document.getElementById(nextVizId);
+    if (!next) return;
+    const needsInit = !this.vizInitialized[nextVizId];
+    if (current?.id === nextVizId && !needsInit) return;
+    if (current && current.id !== nextVizId) {
+      current.classList.remove('active');
+      current.classList.add('exiting');
+      setTimeout(() => current.classList.remove('exiting'), 900);
+    }
+    next.classList.add('active');
+    if (needsInit) {
+      this.vizInitialized[nextVizId] = true;
+      const render = this.renderers[nextVizId];
+      if (render) {
+        const svgEl = next.querySelector('[data-viz-mount="svg"]');
+        if (svgEl) render(svgEl, DATA);
+      }
+    }
+  }
+
+  updateNavDots(activeIndex) {
+    document.querySelectorAll('.nav-dot').forEach((dot,i) => {
+      dot.classList.toggle('active', i===activeIndex);
+    });
+  }
+
+  syncMobileTab(vizId) {
+    document.querySelectorAll('.mob-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.viz===vizId);
+    });
+    const active = document.querySelector(`.mob-tab[data-viz="${vizId}"]`);
+    if (active) active.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+  }
+
+  isMobile() { return window.innerWidth <= 900; }
+
+  initScrollTracking(sections) {
+    const progress = document.getElementById('progress-bar');
+    const nav = document.getElementById('main-nav');
+
+    // Desktop: IntersectionObserver on text sections
+    const obs = new IntersectionObserver(entries => {
+      if (this.isMobile()) return;
+      entries.forEach(entry => {
+        const s = sections.find(s => s.textId===entry.target.id);
+        if (!s) return;
+        const el = document.getElementById(s.textId);
+        if (entry.isIntersecting) {
+          el?.classList.add('is-active');
+          this.switchViz(s.vizId);
+          this.updateNavDots(s.navIndex);
+          this.lastActiveSectionId = s.textId;
+        } else {
+          el?.classList.remove('is-active');
+        }
+      });
+    }, {rootMargin:'-10% 0px -50% 0px', threshold:0});
+
+    sections.forEach(s => {
+      const el = document.getElementById(s.textId);
+      if (el) obs.observe(el);
+    });
+
+    // Mobile: update by scroll position
+    const updateMobile = () => {
+      const vizH = document.getElementById('viz-column')?.offsetHeight || 300;
+      const activeLine = window.scrollY + vizH + (window.innerHeight - vizH)*0.25;
+      let active = sections[0];
+      for (const s of sections) {
+        const el = document.getElementById(s.textId);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top + window.scrollY <= activeLine) active = s;
+      }
+      if (active?.textId !== this.lastActiveSectionId) {
+        this.lastActiveSectionId = active?.textId || null;
+        sections.forEach(s => document.getElementById(s.textId)?.classList.toggle('is-active', s.textId===this.lastActiveSectionId));
+        if (active) { this.switchViz(active.vizId); this.syncMobileTab(active.vizId); this.updateNavDots(active.navIndex); }
+      }
+    };
+
+    window.addEventListener('scroll', () => {
+      const pct = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
+      if (progress) progress.style.width = (pct*100)+'%';
+      nav?.classList.toggle('scrolled', window.scrollY > 80);
+      if (this.isMobile()) updateMobile();
+    }, {passive:true});
+  }
+
+  initMobileTabBar(sections) {
+    document.querySelectorAll('.mob-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const vizId = tab.dataset.viz;
+        const s = sections.find(s=>s.vizId===vizId);
+        if (!s) return;
+        const el = document.getElementById(s.textId);
+        if (el) {
+          const vizH = document.getElementById('viz-column')?.offsetHeight || 0;
+          const top = el.getBoundingClientRect().top + window.scrollY - vizH;
+          window.scrollTo({top:Math.max(0,top), behavior:'smooth'});
+        }
+        this.syncMobileTab(vizId);
+        this.switchViz(vizId);
+      });
+    });
+  }
+
+  initThemeToggle() {
+    const saved = localStorage.getItem('scrolly-theme');
+    if (saved === 'light') document.body.classList.add('light-theme');
+    const toggle = (btn) => {
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        document.body.classList.toggle('light-theme');
+        localStorage.setItem('scrolly-theme', document.body.classList.contains('light-theme') ? 'light' : 'dark');
+      });
+    };
+    toggle(document.getElementById('theme-toggle'));
+    toggle(document.getElementById('mob-theme-toggle'));
+  }
+
+  init() {
+    const sections = this.getSections();
+    if (!sections.length) return;
+    initCounters();
+    this.initThemeToggle();
+    this.initScrollTracking(sections);
+    this.initMobileTabBar(sections);
+    // Activate first viz immediately (context panel)
+    this.switchViz(sections[0].vizId);
+    this.updateNavDots(0);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => new ScrollyEngine().init());
+</script>
+</body>
+</html>
