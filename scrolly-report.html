@@ -199,12 +199,11 @@ body.light-theme .hero-overlay{background:radial-gradient(circle at center,trans
 /* ═══════════════════════════ MOBILE RESPONSIVE ═══════════════════════════ */
 @media (max-width:900px){
   #main-nav{display:none}
-  html{scroll-padding-top:calc(56vh + 44px)}
-  #sidecar-wrapper{flex-direction:column}
-  #text-column{width:100%;padding:0 20px}
-  #text-column .scroll-section{padding:40px 0;min-height:75vh;scroll-margin-top:calc(56vh + 52px);opacity:1!important;transform:none!important;transition:none!important}
-  #viz-column{width:100%;order:-1;position:sticky;top:44px;height:auto;border-left:none;border-bottom:2px solid var(--border);z-index:200}
-  #viz-sticky{border-left:none}
+  #sidecar-wrapper{flex-direction:column;align-items:stretch}
+  #viz-column{order:-1;width:100%;position:sticky;top:0;height:auto;overflow:visible;border-left:none;z-index:300;box-shadow:0 4px 16px rgba(0,0,0,0.08)}
+  #text-column{order:1;width:100%;padding:0 20px}
+  #text-column .scroll-section{padding:40px 0;min-height:75vh;scroll-margin-top:calc(56vh + 44px + 8px);opacity:1!important;transform:none!important;transition:none!important}
+  #viz-sticky{border-left:none;border-bottom:2px solid var(--border)}
   #viz-panels-container{position:relative;inset:unset;height:56vh;min-height:280px;overflow:hidden}
   .viz-panel{padding:16px 16px 12px}
   .viz-title{font-size:0.7rem;margin-bottom:10px;padding-bottom:8px}
@@ -246,25 +245,6 @@ body.light-theme .hero-overlay{background:radial-gradient(circle at center,trans
 <!-- Progress bar -->
 <div id="progress-bar"></div>
 
-<!-- Mobile topbar (shown only on mobile) -->
-<div id="mobile-viz-topbar">
-  <div id="mobile-tab-bar">
-    <button class="mob-tab active" data-viz="viz-context">Overview</button>
-    <button class="mob-tab" data-viz="viz-icc">Reliability</button>
-    <button class="mob-tab" data-viz="viz-bias">Severity Bias</button>
-    <button class="mob-tab" data-viz="viz-scores">Score Gap</button>
-    <button class="mob-tab" data-viz="viz-consistency">Consistency</button>
-    <button class="mob-tab" data-viz="viz-topic">Topic Bias</button>
-    <button class="mob-tab" data-viz="viz-hitl">HITL</button>
-    <button class="mob-tab" data-viz="viz-summary">Findings</button>
-  </div>
-  <div id="mobile-controls">
-    <button class="mob-theme-btn" id="mob-theme-toggle" aria-label="Toggle theme">
-      <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-      <svg class="moon-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-    </button>
-  </div>
-</div>
 
 <!-- Navigation -->
 <nav id="main-nav">
@@ -450,6 +430,27 @@ body.light-theme .hero-overlay{background:radial-gradient(circle at center,trans
   <!-- Right: Viz column -->
   <div id="viz-column">
     <div id="viz-sticky">
+
+      <!-- Mobile topbar: tabs + controls — lives inside viz-sticky so it sticks with charts as one unit -->
+      <div id="mobile-viz-topbar">
+        <div id="mobile-tab-bar">
+          <button class="mob-tab active" data-viz="viz-context">Overview</button>
+          <button class="mob-tab" data-viz="viz-icc">Reliability</button>
+          <button class="mob-tab" data-viz="viz-bias">Severity Bias</button>
+          <button class="mob-tab" data-viz="viz-scores">Score Gap</button>
+          <button class="mob-tab" data-viz="viz-consistency">Consistency</button>
+          <button class="mob-tab" data-viz="viz-topic">Topic Bias</button>
+          <button class="mob-tab" data-viz="viz-hitl">HITL</button>
+          <button class="mob-tab" data-viz="viz-summary">Findings</button>
+        </div>
+        <div id="mobile-controls">
+          <button class="mob-theme-btn" id="mob-theme-toggle" aria-label="Toggle theme">
+            <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="moon-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+        </div>
+      </div>
+
       <div id="viz-panels-container">
 
         <!-- Panel 1: Overview -->
@@ -1385,8 +1386,7 @@ class ScrollyEngine {
         const el = document.getElementById(s.textId);
         if (el) {
           const vizH = document.getElementById('viz-column')?.offsetHeight || 0;
-          const topbarH = document.getElementById('mobile-viz-topbar')?.offsetHeight || 44;
-          const top = el.getBoundingClientRect().top + window.scrollY - vizH - topbarH;
+          const top = el.getBoundingClientRect().top + window.scrollY - vizH;
           window.scrollTo({top:Math.max(0,top), behavior:'smooth'});
         }
         this.syncMobileTab(vizId);
