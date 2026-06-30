@@ -195,6 +195,7 @@ body.light-theme .hero-overlay{background:radial-gradient(circle at center,trans
 
 /* ═══════════════════════════ MOBILE TOPBAR ═══════════════════════════ */
 #mobile-viz-topbar{display:none}
+#viz-toggle{display:none}
 
 /* ═══════════════════════════ MOBILE RESPONSIVE ═══════════════════════════ */
 @media (max-width:900px){
@@ -219,6 +220,12 @@ body.light-theme .hero-overlay{background:radial-gradient(circle at center,trans
   .mob-theme-btn .moon-icon{display:none}
   body.light-theme .mob-theme-btn .sun-icon{display:none}
   body.light-theme .mob-theme-btn .moon-icon{display:block}
+  #viz-toggle{display:flex;flex-shrink:0;width:44px;background:transparent;border:none;border-left:1px solid var(--border);cursor:pointer;align-items:center;justify-content:center;color:var(--ink-muted);transition:color 0.2s}
+  #viz-toggle:hover{color:var(--accent-blue)}
+  #viz-toggle svg{transition:transform 0.35s cubic-bezier(0.77,0,0.175,1)}
+  #viz-column.viz-collapsed #viz-toggle svg{transform:rotate(180deg)}
+  #viz-panels-container{transition:height 0.4s cubic-bezier(0.77,0,0.175,1),min-height 0.4s cubic-bezier(0.77,0,0.175,1),opacity 0.35s ease}
+  #viz-column.viz-collapsed #viz-panels-container{height:0;min-height:0;opacity:0;pointer-events:none}
   #hero{height:auto!important;min-height:100dvh;overflow:visible!important;justify-content:flex-start;padding-top:80px}
   .hero-stats{position:relative;grid-template-columns:repeat(2,1fr)}
   .hero-stat:nth-child(1),.hero-stat:nth-child(2){border-bottom:1px solid var(--border)}
@@ -447,6 +454,9 @@ body.light-theme .hero-overlay{background:radial-gradient(circle at center,trans
           <button class="mob-theme-btn" id="mob-theme-toggle" aria-label="Toggle theme">
             <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
             <svg class="moon-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <button id="viz-toggle" aria-label="Toggle visualization panel">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>
           </button>
         </div>
       </div>
@@ -1319,8 +1329,12 @@ class ScrollyEngine {
     document.querySelectorAll('.mob-tab').forEach(tab => {
       tab.classList.toggle('active', tab.dataset.viz===vizId);
     });
-    const active = document.querySelector(`.mob-tab[data-viz="${vizId}"]`);
-    if (active) active.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+    const activeTab = document.querySelector(`.mob-tab[data-viz="${vizId}"]`);
+    const tabBar = document.getElementById('mobile-tab-bar');
+    if (activeTab && tabBar) {
+      const center = activeTab.offsetLeft - (tabBar.offsetWidth - activeTab.offsetWidth) / 2;
+      tabBar.scrollLeft = Math.max(0, center);
+    }
   }
 
   isMobile() { return window.innerWidth <= 900; }
@@ -1353,8 +1367,12 @@ class ScrollyEngine {
     });
 
     // Mobile: update by scroll position
+    let vizH = document.getElementById('viz-column')?.offsetHeight || 300;
+    window.addEventListener('resize', () => {
+      vizH = document.getElementById('viz-column')?.offsetHeight || 300;
+    }, {passive:true});
+
     const updateMobile = () => {
-      const vizH = document.getElementById('viz-column')?.offsetHeight || 300;
       const activeLine = window.scrollY + vizH + (window.innerHeight - vizH)*0.25;
       let active = sections[0];
       for (const s of sections) {
@@ -1384,15 +1402,27 @@ class ScrollyEngine {
         const s = sections.find(s=>s.vizId===vizId);
         if (!s) return;
         const el = document.getElementById(s.textId);
-        if (el) {
-          const vizH = document.getElementById('viz-column')?.offsetHeight || 0;
-          const top = el.getBoundingClientRect().top + window.scrollY - vizH;
-          window.scrollTo({top:Math.max(0,top), behavior:'smooth'});
-        }
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         this.syncMobileTab(vizId);
         this.switchViz(vizId);
       });
     });
+
+    const vizToggle = document.getElementById('viz-toggle');
+    const vizColumn = document.getElementById('viz-column');
+    if (vizToggle && vizColumn) {
+      vizToggle.addEventListener('click', () => {
+        vizColumn.classList.toggle('viz-collapsed');
+        // After transition, recalculate sticky height so scroll math stays correct
+        setTimeout(() => {
+          vizH = vizColumn.offsetHeight || 300;
+          const scrollMargin = vizH + 8 + 'px';
+          document.querySelectorAll('.scroll-section').forEach(el => {
+            el.style.scrollMarginTop = scrollMargin;
+          });
+        }, 420);
+      });
+    }
   }
 
   initThemeToggle() {
