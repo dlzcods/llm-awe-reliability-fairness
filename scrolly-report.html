@@ -198,11 +198,12 @@ body.light-theme .hero-overlay{background:radial-gradient(circle at center,trans
 
 /* ═══════════════════════════ MOBILE RESPONSIVE ═══════════════════════════ */
 @media (max-width:900px){
-  #main-nav{padding:10px 16px}
+  #main-nav{display:none}
+  html{scroll-padding-top:calc(56vh + 44px)}
   #sidecar-wrapper{flex-direction:column}
   #text-column{width:100%;padding:0 20px}
-  #text-column .scroll-section{padding:40px 0;min-height:75vh;scroll-margin-top:calc(56vh + 8px);opacity:1!important;transform:none!important;transition:none!important}
-  #viz-column{width:100%;position:sticky;top:0;height:auto;border-left:none;border-bottom:2px solid var(--border);z-index:200}
+  #text-column .scroll-section{padding:40px 0;min-height:75vh;scroll-margin-top:calc(56vh + 52px);opacity:1!important;transform:none!important;transition:none!important}
+  #viz-column{width:100%;order:-1;position:sticky;top:44px;height:auto;border-left:none;border-bottom:2px solid var(--border);z-index:200}
   #viz-sticky{border-left:none}
   #viz-panels-container{position:relative;inset:unset;height:56vh;min-height:280px;overflow:hidden}
   .viz-panel{padding:16px 16px 12px}
@@ -234,6 +235,7 @@ body.light-theme .hero-overlay{background:radial-gradient(circle at center,trans
   .mob-tab{padding:8px 10px;font-size:0.63rem}
 }
 @media (max-height:500px) and (orientation:landscape){
+  #main-nav{display:none}
   #viz-panels-container{height:90vh;min-height:200px}
   .hero-content{padding-top:20px}
 }
@@ -1383,7 +1385,8 @@ class ScrollyEngine {
         const el = document.getElementById(s.textId);
         if (el) {
           const vizH = document.getElementById('viz-column')?.offsetHeight || 0;
-          const top = el.getBoundingClientRect().top + window.scrollY - vizH;
+          const topbarH = document.getElementById('mobile-viz-topbar')?.offsetHeight || 44;
+          const top = el.getBoundingClientRect().top + window.scrollY - vizH - topbarH;
           window.scrollTo({top:Math.max(0,top), behavior:'smooth'});
         }
         this.syncMobileTab(vizId);
